@@ -338,8 +338,8 @@ app.post('/api/consultar', async (req, res) => {
         const triajeResponse = await openai.chat.completions.create({
             model: "deepseek/deepseek-chat",
             messages: mensajesTriaje,
-            temperature: 0.0,
-            max_tokens: 150
+            temperature: 0.3,
+            max_tokens: 4000
         });
 
         const triajeText = triajeResponse.choices[0]?.message?.content?.trim() || "CLARA";
@@ -441,7 +441,7 @@ app.post('/api/consultar', async (req, res) => {
                 query_embedding: embedding,
                 filtro_tipo: 'ley',
                 match_threshold: 0.25,
-                match_count: 3
+                match_count: 15
             });
             if (!errLey && leyes && leyes.length > 0) {
                 // MAGIA V6: Etiquetado de identidad reforzado
