@@ -736,13 +736,19 @@ app.post('/api/quiz/generar', async (req, res) => {
         // 2. Elegimos un artículo al azar del Código Civil (1 al 2524) para ambientar la respuesta
         const artAleatorio = Math.floor(Math.random() * 2524) + 1;
         
-        // Buscamos el contenido de ese artículo en Supabase de forma segura
-        const { data: articuloData, error } = await supabase
-            .from('fragmentos_legales')
-            .select('articulo_numero, contenido, titulo')
-            .eq('tipo', 'ley')
-            .eq('articulo_numero', String(artAleatorio))
-            .single();
+        // Búsqueda de artículo por número exacto en metadatos
+const { data: dataExacta, error: errorExacto } = await supabase
+    .from('fragmentos_legales')
+    .select('contenido, metadatos')
+    .eq('metadatos->>tipo', 'ley')
+    .eq('metadatos->>articulo', String(numeroArticuloDetectado))
+    .limit(1);
+
+if (!errorExacto && dataExacta && dataExacta.length > 0) {
+    contextoLey += `[LEY ESTRICTA - CÓDIGO CIVIL - Art. ${dataExacta[0].metadatos.articulo}]\n${dataExacta[0].contenido}\n\n`;
+    articuloExactoEncontrado = true;
+}
+// Si no se encuentra, se usará la búsqueda vectorial más adelante
 
         // 3. Manejo anti-crash: Si la base de datos falla o el artículo está vacío, ponemos texto seguro.
         const numeroSeguro = articuloData?.articulo_numero || artAleatorio;
