@@ -36,7 +36,7 @@ async function ejecutarIngestion() {
         const articulos = JSON.parse(rawData);
         console.log(`✅ Se encontraron ${articulos.length} artículos.`);
 
-        // Mapeo a nuevas columnas
+        // Mapeo a nuevas columnas con Contexto Enriquecido
         const registros = articulos.map(art => {
             let libro = null;
             let titulo = null;
@@ -55,35 +55,57 @@ async function ejecutarIngestion() {
             const artNumMatch = art.titulo.match(/Art\.?\s*(\d+[a-zA-Zº°]*)/i);
             if (artNumMatch) articulo_numero = artNumMatch[1].trim();
 
+            // CONSTRUCCIÓN DE LA HUELLA DE IDENTIDAD (Vital para la IA)
+            const prefijoLey = "Código: Código Civil de la República de Chile. ";
+            const prefijoUbicacion = `${libro ? 'Ubicación: Libro ' + libro + '. ' : ''}${titulo ? 'Título ' + titulo + '. ' : ''}`;
+            const prefijoArticulo = `Artículo: ${articulo_numero || 'Sin número'}. `;
+            
+            const contenidoEnriquecido = `${prefijoLey}${prefijoUbicacion}${prefijoArticulo}Texto: ${art.contenido}`;
+
             return {
                 contenido: art.contenido,
                 tipo: 'ley',
                 libro: libro,
                 titulo: titulo,
                 articulo_numero: articulo_numero,
+                numero_limpio: articulo_numero ? articulo_numero.replace(/[^0-9]/g, '') : null,
                 articulo_titulo_completo: articulo_titulo_completo,
                 autor: null,
-                fuente: 'BCN'
+                fuente: 'BCN',
+                ley_id: 'Codigo_Civil',
+                contenido_para_embedding: contenidoEnriquecido
             };
         });
 
-        // Inserción por lotes
+        // Eliminar duplicados por (ley_id, numero_limpio)
+        const vistos = new Map();
+        const registrosUnicos = [];
+        for (const reg of registros) {
+            const clave = `${reg.ley_id}|${reg.numero_limpio}`;
+            if (!vistos.has(clave)) {
+                vistos.set(clave, true);
+                registrosUnicos.push(reg);
+            }
+        }
+        console.log(`✅ Se eliminarán duplicados: ${registros.length} -> ${registrosUnicos.length} artículos únicos.`);
+
+        // Inserción por lotes usando registrosUnicos
         const TAMAÑO_LOTE = 200;
         let lotesExitosos = 0;
-        for (let i = 0; i < registros.length; i += TAMAÑO_LOTE) {
-            const lote = registros.slice(i, i + TAMAÑO_LOTE);
+        for (let i = 0; i < registrosUnicos.length; i += TAMAÑO_LOTE) {
+            const lote = registrosUnicos.slice(i, i + TAMAÑO_LOTE);
             const { error: insertError } = await supabase
                 .from('fragmentos_legales')
                 .insert(lote);
             if (insertError) throw new Error(`Fallo en lote: ${insertError.message}`);
             lotesExitosos++;
-            console.log(`   ✅ Lote ${lotesExitosos} (${Math.min(i+TAMAÑO_LOTE, registros.length)} artículos)`);
+            console.log(`   ✅ Lote ${lotesExitosos} (${Math.min(i + TAMAÑO_LOTE, registrosUnicos.length)} artículos)`);
         }
 
-        console.log(`\n🏆 ¡INGESTIÓN COMPLETA! ${registros.length} artículos insertados.`);
+        console.log(`\n🏆 ¡INGESTIÓN COMPLETA! ${registrosUnicos.length} artículos insertados.`);
     } catch (error) {
         console.error("\n❌ ERROR CRÍTICO:", error.message);
     }
 }
 
-ejecutarIngestion();
+ejecutarIngestion();cls
