@@ -18,10 +18,11 @@ const openai = new OpenAI({
 const cacheRespuestas = new Map();
 const cacheEmbeddings = new Map();
 const conversaciones = new Map();
+const cachePreguntasQuiz = new Map();
 const TTL_RESPUESTA = 3600000;
 const MAX_HISTORIAL = 10;
 
-// ========== DICCIONARIO DE ORO (COMPLETO E INTACTO) ==========
+// ========== DICCIONARIO DE ORO (COMPLETO) ==========
 const diccionarioOro = {
     "ley": 1, "costumbre": 2, "renuncia de los derechos": 12, "efectos territoriales": 14,
     "interpretacion de la ley": 19, "dolo": 44, "culpa": 44, "fuerza mayor": 45,
@@ -100,24 +101,7 @@ const diccionarioOro = {
     "accion revocatoria": 2468, "prelacion de creditos": 2469, "prescripcion": 2492
 };
 
-// ========== MANTENIMIENTO DE MEMORIA (EVITA CAÍDAS DEL SERVIDOR) ==========
-function limpiarCaches() {
-    const now = Date.now();
-    for (const [key, val] of cacheRespuestas.entries()) {
-        if (now - val.timestamp > TTL_RESPUESTA) cacheRespuestas.delete(key);
-    }
-    if (cacheEmbeddings.size > 500) {
-        const primerKey = cacheEmbeddings.keys().next().value;
-        cacheEmbeddings.delete(primerKey);
-    }
-}
-setInterval(limpiarCaches, 600000); // Limpia cada 10 minutos
-
-function hashTexto(texto) {
-    return crypto.createHash('sha256').update(texto).digest('hex');
-}
-
-// ========== FUNCIONES AUXILIARES DE BÚSQUEDA ==========
+// ========== FUNCIONES AUXILIARES ==========
 function calcularSimilitud(s1, s2) {
     let s1Lower = s1.toLowerCase();
     let s2Lower = s2.toLowerCase();
@@ -162,22 +146,39 @@ function buscarEnDiccionario(texto) {
     return null;
 }
 
+function hashTexto(texto) {
+    return crypto.createHash('sha256').update(texto).digest('hex');
+}
+
+function limpiarCaches() {
+    const now = Date.now();
+    for (const [key, val] of cacheRespuestas.entries()) {
+        if (now - val.timestamp > TTL_RESPUESTA) cacheRespuestas.delete(key);
+    }
+    if (cacheEmbeddings.size > 500) {
+        const primerKey = cacheEmbeddings.keys().next().value;
+        cacheEmbeddings.delete(primerKey);
+    }
+}
+setInterval(limpiarCaches, 600000);
+
+// ========== BÚSQUEDA ROBUSTA DE ARTÍCULO Y DOCTRINA ==========
 async function buscarArticuloPorNumero(numero) {
     try {
         const { data, error } = await supabase
             .from('fragmentos_legales')
             .select('contenido, metadatos, id')
             .eq('metadatos->>tipo', 'ley')
-            .filter('metadatos->>articulo', 'eq', String(numero))
+            .filter('metadatos->>articulo', 'ilike', `%${numero}%`)
             .limit(1);
         if (!error && data && data.length > 0) return data[0];
     } catch (e) {
-        console.error("Error buscando artículo por número:", e.message);
+        console.error("Error buscando articulo:", e.message);
     }
     return null;
 }
 
-async function buscarDoctrina(embedding, limite = 10) {
+async function buscarDoctrina(embedding, limite = 8) {
     try {
         const { data, error } = await supabase.rpc('buscar_fragmentos', {
             query_embedding: embedding,
@@ -187,12 +188,12 @@ async function buscarDoctrina(embedding, limite = 10) {
         });
         if (!error && data) return data;
     } catch (e) {
-        console.error("Error buscando doctrina vectorial:", e.message);
+        console.error("Error buscando doctrina:", e.message);
     }
     return [];
 }
 
-// ===================== ENDPOINT PRINCIPAL HÍBRIDO =====================
+// ===================== ENDPOINT PRINCIPAL (STREAMING AGRESIVO) =====================
 app.post('/api/consultar', async (req, res) => {
     const { pregunta, sessionId } = req.body;
     if (!pregunta) return res.status(400).json({ error: "Pregunta vacía" });
@@ -212,9 +213,16 @@ app.post('/api/consultar', async (req, res) => {
     let historial = conversaciones.get(sessionId);
     if (historial.length > MAX_HISTORIAL) historial = historial.slice(-MAX_HISTORIAL);
 
-    // 1. Detectar número de artículo
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
+    // Detectar número de artículo
     let numeroArticuloDetectado = null;
     let articuloObjeto = null;
+    let articuloContenido = "";
     const matchNumero = pregunta.match(/(?:art(?:[íi]culo|\.?)?\s*)?(\d{1,4})(?!\d)/i);
     
     if (matchNumero && matchNumero[1]) {
@@ -224,20 +232,17 @@ app.post('/api/consultar', async (req, res) => {
         if (fromDic) numeroArticuloDetectado = fromDic.toString();
     }
 
-    let busquedaExitosa = false;
-    let contextoLey = "";
-    
     if (numeroArticuloDetectado) {
         articuloObjeto = await buscarArticuloPorNumero(numeroArticuloDetectado);
         if (articuloObjeto) {
-            contextoLey = `[ARTÍCULO OFICIAL CC] Art. ${numeroArticuloDetectado}: ${articuloObjeto.contenido.replace(/\[.*?\]/g, '').trim()}`;
-            busquedaExitosa = true;
+            articuloContenido = articuloObjeto.contenido.replace(/\[.*?\]/g, '').trim();
+            // STREAMING AGRESIVO: Enviar artículo inmediatamente para que no se vea pegado
+            res.write(`data: ${JSON.stringify({ content: `📜 **Art. ${numeroArticuloDetectado} del Código Civil**\n\n${articuloContenido}\n\n---\n\n` })}\n\n`);
         }
     }
 
-    // 2. Generar embedding y buscar Doctrina
+    // Generar embedding
     let embedding = null;
-    let doctrinaTextos = [];
     if (cacheEmbeddings.has(hashPregunta)) {
         embedding = cacheEmbeddings.get(hashPregunta);
     } else {
@@ -254,40 +259,39 @@ app.post('/api/consultar', async (req, res) => {
         }
     }
 
+    // Buscar doctrina
+    let doctrinaTextos = [];
     if (embedding) {
-        const resultados = await buscarDoctrina(embedding, 8); // Bajado a 8 para evitar Data Flood
+        const resultados = await buscarDoctrina(embedding, 8); // Ajustado para evitar Data Flood
         doctrinaTextos = resultados.map(f => f.contenido || f.texto || '');
     }
 
-    // 3. Evaluar si usar base de datos o conocimiento de la IA
-    let contextoDoctrina = doctrinaTextos.length ? doctrinaTextos.join('\n\n---\n\n') : '';
-    const hayContextoLocal = busquedaExitosa || doctrinaTextos.length > 0;
+    let contextoDoctrina = doctrinaTextos.length ? doctrinaTextos.join('\n\n---\n\n') : 'No se encontraron apuntes doctrinales relevantes.';
+    let contextoTotal = `### ARTÍCULO DEL CÓDIGO CIVIL:\n${articuloContenido || "No se detectó artículo exacto."}\n\n### DOCTRINA:\n${contextoDoctrina}`;
 
-    const contextoTotal = hayContextoLocal 
-        ? `### CONTEXTO DE LA BASE DE DATOS:\n${contextoLey}\n\n### DOCTRINA:\n${contextoDoctrina}`
-        : `### AVISO DEL SISTEMA: No se encontraron artículos exactos en la base de datos local. RESPONDE USANDO TU CONOCIMIENTO OFICIAL ENTRENADO SOBRE EL CÓDIGO CIVIL DE CHILE Y LA DOCTRINA CHILENA.`;
-
+    // Prompt del sistema con todas las reglas originales
     const systemPrompt = 
         "Eres Alucilex, un catedrático de Derecho Civil chileno. Debes responder con profundidad académica, como si dictaras una clase.\n\n" +
         "REGLAS ESTRICTAS:\n" +
-        "1. **SI HAY CONTEXTO DE BASE DE DATOS:** Inicia tu respuesta copiando exactamente el artículo del Código Civil que aparece en el contexto.\n" +
-        "2. **SI NO HAY CONTEXTO (AVISO DEL SISTEMA):** Extrae de tu propio entrenamiento la respuesta, el artículo aplicable del Código Civil Chileno y los conceptos doctrinarios (Alessandri, Somarriva, Orrego). Nunca digas 'no tengo información'.\n" +
-        "3. **DESARROLLO OBLIGATORIO:** Desarrolla: Concepto doctrinal, Requisitos, Características, Ejemplos prácticos y Conclusión.\n" +
-        "4. **PROHIBIDO:** Responder con esquemas o listas cortas. Redacta en prosa académica conectada.\n" +
-        "5. **CITA FUENTES:** Si usas doctrina, indícalo al final como '### Fuentes utilizadas'.";
+        "1. **TRANSCRIPCIÓN LITERAL:** Si tienes el artículo exacto en el contexto, inicia citándolo literalmente (aunque ya se haya mostrado al usuario).\n" +
+        "2. **DESARROLLO OBLIGATORIO:** Desarrolla los siguientes apartados con al menos 2-3 párrafos cada uno:\n" +
+        "   - ### Concepto doctrinal\n" +
+        "   - ### Elementos o requisitos\n" +
+        "   - ### Características principales\n" +
+        "   - ### Clasificaciones (si corresponde)\n" +
+        "   - ### Integración con otras instituciones del Código Civil\n" +
+        "   - ### Ejemplos prácticos\n" +
+        "   - ### Conclusión\n" +
+        "3. **PROHIBIDO:** Responder con esquemas o listas cortas. Redacta en prosa académica conectada.\n" +
+        "4. **CITA FUENTES:** Si usas doctrina, indícalo. Al final agrega '### Fuentes utilizadas'.\n" +
+        "5. **CONOCIMIENTO AUTÓNOMO:** Si el contexto está vacío, extrae toda la respuesta de tu propio entrenamiento oficial sobre el Código Civil de Chile. NUNCA digas 'no tengo información'.";
 
     let mensajes = [{ role: "system", content: systemPrompt }];
     for (let msg of historial) mensajes.push(msg);
     mensajes.push({
         role: "user",
-        content: `${contextoTotal}\n\nPregunta del usuario: ${pregunta}`
+        content: `${contextoTotal}\n\nPregunta del usuario: ${pregunta}\n\nRecuerda desarrollar la cátedra completa.`
     });
-
-    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
-
-    if (articuloObjeto) {
-        res.write(`data: ${JSON.stringify({ content: `📜 **Art. ${numeroArticuloDetectado} del Código Civil**\n\n${articuloObjeto.contenido.replace(/\[.*?\]/g, '').trim()}\n\n---\n\n` })}\n\n`);
-    }
 
     let respuestaFinal = "";
 
@@ -296,24 +300,23 @@ app.post('/api/consultar', async (req, res) => {
             model: "deepseek/deepseek-chat",
             messages: mensajes,
             temperature: 0.2,
-            max_tokens: 4500, // Ajustado para prevenir errores de límite
+            max_tokens: 5000,
             stream: true,
         });
-        
         for await (const chunk of stream) {
             const content = chunk.choices[0]?.delta?.content || "";
             respuestaFinal += content;
             res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
     } catch (err) {
-        console.error("Error en el stream de DeepSeek:", err.message);
-        res.write(`data: ${JSON.stringify({ content: "\n\n❌ Hubo un fallo en la conexión con la cátedra virtual. Por favor, reformula tu pregunta." })}\n\n`);
+        console.error("Error OpenAI Stream:", err.message);
+        res.write(`data: ${JSON.stringify({ content: "\n\n❌ Error temporal de conexión con la IA. Intenta de nuevo." })}\n\n`);
     }
 
     res.write('data: [DONE]\n\n');
     res.end();
 
-    if (respuestaFinal.length > 50) {
+    if(respuestaFinal.length > 20){
         cacheRespuestas.set(hashPregunta, { respuesta: respuestaFinal, timestamp: Date.now() });
         historial.push({ role: "user", content: pregunta });
         historial.push({ role: "assistant", content: respuestaFinal });
@@ -321,127 +324,227 @@ app.post('/api/consultar', async (req, res) => {
     }
 });
 
-// ======================== QUIZ NO BLOQUEANTE ========================
+// ======================== QUIZ Y MAPEO ORIGINAL COMPLETO ========================
+const mapeoTemas = {
+    "bienes": [
+        { campo: "articulo_numero", operador: "gte", valor: 565 },
+        { campo: "articulo_numero", operador: "lte", valor: 595 }
+    ],
+    "dominio": [
+        { campo: "articulo_numero", operador: "gte", valor: 582 },
+        { campo: "articulo_numero", operador: "lte", valor: 605 }
+    ],
+    "tradicion": [
+        { campo: "articulo_numero", operador: "gte", valor: 670 },
+        { campo: "articulo_numero", operador: "lte", valor: 699 }
+    ],
+    "posesion": [
+        { campo: "articulo_numero", operador: "gte", valor: 700 },
+        { campo: "articulo_numero", operador: "lte", valor: 729 }
+    ],
+    "filiacion": [
+        { campo: "articulo_numero", operador: "gte", valor: 179 },
+        { campo: "articulo_numero", operador: "lte", valor: 242 }
+    ],
+    "sucesion": [
+        { campo: "articulo_numero", operador: "gte", valor: 951 },
+        { campo: "articulo_numero", operador: "lte", valor: 1067 }
+    ],
+    "obligaciones": [
+        { campo: "articulo_numero", operador: "gte", valor: 1437 },
+        { campo: "articulo_numero", operador: "lte", valor: 1566 }
+    ],
+    "contratos": [
+        { campo: "articulo_numero", operador: "gte", valor: 1438 },
+        { campo: "articulo_numero", operador: "lte", valor: 2456 }
+    ],
+    "sociedad_conyugal": [
+        { campo: "articulo_numero", operador: "gte", valor: 135 },
+        { campo: "articulo_numero", operador: "lte", valor: 185 }
+    ]
+};
+
+// BANCO DE PREGUNTAS ORIGINAL (INTACTO, SIN RESUMEN)
 const bancoPreguntasAlucilex = [
     {
-        pregunta: "Juan le dona a Pedro un automóvil con la condición de que este último 'no se case nunca'. Según el CC chileno, ¿cuál es el efecto de esta condición?",
+        pregunta: "Juan le dona a Pedro un automóvil con la condición de que este último 'no se case nunca'. Según el Código Civil chileno, ¿cuál es el efecto de esta condición?",
         opciones: ["A. La condición es válida y Pedro pierde el auto si se casa.", "B. La condición se tiene por no escrita y la donación es pura y simple.", "C. La condición anula el acto jurídico por completo.", "D. La condición es válida pero solo por 10 años."],
         correcta: 1,
-        explicacion: "El artículo 1073 del Código Civil establece que la condición de no casarse 'se tendrá por no escrita', salvo que se limite a no casarse antes de cumplir la mayoría de edad. La donación vale."
+        explicacion: "El artículo 1073 del Código Civil establece que la condición de no casarse 'se tendrá por no escrita', salvo que se limite a no casarse antes de cumplir la mayoría de edad o con una persona determinada. Por ende, la donación vale y la condición se ignora."
     },
     {
         pregunta: "Un joven de 16 años (menor adulto) vende su bicicleta sin la autorización de su representante legal. ¿Qué sanción civil acarrea este acto?",
         opciones: ["A. Nulidad Absoluta.", "B. Inexistencia.", "C. Nulidad Relativa.", "D. Resciliación."],
         correcta: 2,
-        explicacion: "Los actos de los menores adultos adolecen de nulidad relativa, ya que su incapacidad no es absoluta y el acto puede ser saneado por la ratificación del representante (Art. 1682)."
+        explicacion: "Los actos de los menores adultos (incapaces relativos) adolecen de nulidad relativa, ya que su incapacidad no es absoluta y el acto puede ser saneado por la ratificación del representante legal o por el transcurso del tiempo (4 años), según el Art. 1682."
     },
     {
-        pregunta: "María, para evitar el embargo, celebra una compraventa con su hermano sobre su casa, pero acuerdan en secreto que no habrá pago. ¿Qué tipo de simulación es?",
+        pregunta: "María, para evitar el embargo, celebra una compraventa con su hermano sobre su única casa, pero acuerdan en secreto que no habrá pago de precio ni entrega. ¿Qué tipo de simulación existe aquí?",
         opciones: ["A. Simulación lícita.", "B. Simulación relativa.", "C. Simulación absoluta.", "D. Reserva mental."],
         correcta: 2,
-        explicacion: "Es simulación absoluta. Celebran un acto jurídico, pero en realidad no quieren celebrar acto alguno (es una fachada)."
+        explicacion: "Estamos ante una simulación absoluta. En ella, las partes celebran un acto jurídico, pero en realidad no quieren celebrar acto alguno (todo es una fachada). A diferencia de la relativa, donde esconden un acto real bajo la apariencia de otro."
     },
     {
         pregunta: "Para que la fuerza vicie el consentimiento, el Código Civil exige que sea:",
         opciones: ["A. Injusta, grave y determinante.", "B. Física, actual e irresistible.", "C. Moral, leve y proveniente de la contraparte.", "D. Exclusivamente económica."],
         correcta: 0,
-        explicacion: "La fuerza debe ser grave (producir una impresión fuerte), injusta (contraria a derecho) y determinante (el acto se celebra a consecuencia de ella, Art. 1456)."
+        explicacion: "La fuerza debe ser grave (capaz de producir una impresión fuerte), injusta (contraria a derecho) y determinante (el acto se celebra a consecuencia de ella). El Art. 1456 agrega que se presume gravedad si hay amenaza de un mal irreparable y grave."
     },
     {
         pregunta: "Según el Art. 1464 del Código Civil, hay objeto ilícito en la enajenación de:",
-        opciones: ["A. Las cosas que no existen pero se espera que existan.", "B. Los derechos que no pueden transferirse a otra persona.", "C. Las cosas embargadas por decreto judicial, incluso con autorización.", "D. Los bienes raíces en zonas fronterizas."],
+        opciones: ["A. Las cosas que no existen pero se espera que existan.", "B. Los derechos o privilegios que no pueden transferirse a otra persona.", "C. Las cosas embargadas por decreto judicial, incluso si el juez lo autoriza.", "D. Los bienes raíces ubicados en zonas fronterizas."],
         correcta: 1,
-        explicacion: "El Art. 1464 Nº 2 señala expresamente que hay objeto ilícito en la enajenación de los derechos y privilegios que no pueden transferirse a otras personas."
+        explicacion: "El Art. 1464 Nº 2 señala expresamente que hay objeto ilícito en la enajenación de los derechos y privilegios que no pueden transferirse a otras personas (derechos personalísimos)."
     },
     {
         pregunta: "¿Cuál de los siguientes modos de adquirir el dominio es de carácter 'originario'?",
         opciones: ["A. La tradición.", "B. La sucesión por causa de muerte.", "C. La ocupación.", "D. La cesión de derechos."],
         correcta: 2,
-        explicacion: "La ocupación es originaria, el dominio nace por primera vez en el patrimonio del adquirente al apoderarse de una cosa sin dueño."
+        explicacion: "La ocupación es un modo originario, ya que el dominio no se transfiere de un patrimonio a otro (como en la tradición), sino que nace por primera vez en el patrimonio del adquirente al apoderarse de una cosa que no pertenece a nadie."
     },
     {
-        pregunta: "Para que exista 'posesión regular' de un inmueble, ¿qué requisitos se exigen?",
+        pregunta: "Para que exista 'posesión regular' de un inmueble, ¿qué requisitos copulativos se exigen?",
         opciones: ["A. Justo título, buena fe inicial y, si el título es traslaticio, la tradición.", "B. Dominio, capacidad y buena fe permanente.", "C. Inscripción conservatoria por al menos 10 años.", "D. Mero tenedor, título gratuito y buena fe."],
         correcta: 0,
-        explicacion: "Art. 702 CC: Requiere justo título y buena fe al momento de adquirirla. Si es título traslaticio, requiere la tradición."
+        explicacion: "Según el Art. 702 del Código Civil, la posesión regular requiere justo título y buena fe al momento de adquirirla. Si el título es traslaticio de dominio (como una compraventa), requiere además la tradición."
     },
     {
-        pregunta: "Si un río cambia definitivamente su cauce, dejando en seco una franja. ¿Qué accesión es?",
+        pregunta: "Si un río cambia definitivamente su cauce, dejando en seco una franja de tierra, los dueños de los predios ribereños adquieren esa tierra. ¿Qué tipo de accesión es esta?",
         opciones: ["A. Aluvión.", "B. Avulsión.", "C. Adjunción.", "D. Mutación de álveo o cambio de cauce."],
         correcta: 3,
-        explicacion: "Es mutación de álveo. Los propietarios riberanos acceden a la parte descubierta en proporción a sus líneas (Art. 654)."
+        explicacion: "Es un caso de accesión de inmueble a inmueble. La ley señala que, si el río cambia de cauce, los propietarios riberanos acceden a la parte descubierta en proporción a sus líneas de demarcación (Art. 654 y 655)."
     },
     {
-        pregunta: "La tradición del dominio de los bienes raíces se efectúa por:",
-        opciones: ["A. La entrega material de las llaves.", "B. La firma de la escritura pública.", "C. La inscripción del título en el CBR.", "D. El pago íntegro del precio."],
+        pregunta: "La tradición del dominio de los bienes raíces y de los derechos reales constituidos en ellos, se efectúa por:",
+        opciones: ["A. La entrega material de las llaves de la propiedad.", "B. La firma de la escritura pública ante notario.", "C. La inscripción del título en el Registro de Propiedad del Conservador de Bienes Raíces.", "D. El pago íntegro del precio convenido."],
         correcta: 2,
-        explicacion: "Art. 686 CC: La tradición de bienes raíces solo se verifica mediante la inscripción en el Conservador de Bienes Raíces."
+        explicacion: "El Art. 686 del Código Civil es categórico: la tradición de bienes raíces solo se verifica mediante la inscripción en el Conservador de Bienes Raíces respectivo. Sin inscripción, el comprador no es dueño."
     },
     {
         pregunta: "El arrendatario de una casa tiene respecto de ella la calidad de:",
         opciones: ["A. Poseedor irregular.", "B. Poseedor regular.", "C. Mero tenedor.", "D. Propietario fiduciario."],
         correcta: 2,
-        explicacion: "Es mero tenedor (Art. 714 CC), ejerce la tenencia no como dueño, sino a nombre del dueño."
+        explicacion: "El arrendatario es un mero tenedor (Art. 714 del CC), ya que ejerce la tenencia sobre una cosa, no como dueño, sino en lugar o a nombre del dueño (el arrendador). Le falta el 'animus domini'."
     },
     {
         pregunta: "¿En qué tipo de contratos va envuelta siempre la condición resolutoria tácita?",
         opciones: ["A. En los contratos unilaterales.", "B. En los contratos bilaterales.", "C. En los contratos reales.", "D. En los contratos gratuitos."],
         correcta: 1,
-        explicacion: "Art. 1489: En los contratos bilaterales va envuelta la condición resolutoria de no cumplirse por uno lo pactado."
+        explicacion: "El Art. 1489 consagra que en los contratos bilaterales va envuelta la condición resolutoria de no cumplirse por uno de los contratantes lo pactado, otorgando el derecho alternativo a pedir la resolución o el cumplimiento."
     },
     {
-        pregunta: "Si tres amigos piden un préstamo con solidaridad pasiva, el banco puede exigir:",
-        opciones: ["A. A cada uno un tercio exclusivamente.", "B. El total de la deuda a cualquiera de ellos.", "C. Solo al de mayor patrimonio.", "D. Primero al fiador."],
+        pregunta: "Si tres amigos piden un préstamo al banco y pactan solidaridad pasiva, el banco puede exigir:",
+        opciones: ["A. A cada uno un tercio de la deuda exclusivamente.", "B. El total de la deuda a cualquiera de ellos, a su arbitrio.", "C. Solo al deudor que tenga más patrimonio.", "D. Primero a un fiador y luego a los deudores."],
         correcta: 1,
-        explicacion: "Solidaridad pasiva (Art. 1514): el acreedor puede dirigirse contra cualquiera por el total de la deuda."
+        explicacion: "La solidaridad pasiva significa que el acreedor puede dirigirse en contra de cualquiera de los deudores y exigirle el pago total de la deuda. El pago que haga uno extingue la obligación respecto de todos ante el banco (Art. 1514)."
     },
     {
         pregunta: "¿Qué función principal cumple la cláusula penal en un contrato?",
-        opciones: ["A. Pagar impuestos.", "B. Avaluar anticipada y convencionalmente los perjuicios.", "C. Extinguir la obligación automáticamente.", "D. Establecer la nulidad."],
+        opciones: ["A. Pagar impuestos al Fisco por el contrato.", "B. Avaluar anticipada y convencionalmente los perjuicios por el incumplimiento.", "C. Extinguir la obligación original automáticamente.", "D. Establecer la nulidad del contrato en caso de mora."],
         correcta: 1,
-        explicacion: "Art. 1535: Sirve como avaluación anticipada de los perjuicios por incumplimiento o retardo."
+        explicacion: "Según el Art. 1535, sirve como avaluación anticipada de los perjuicios, eximiendo al acreedor de probarlos si el deudor no cumple o retarda su cumplimiento."
     },
     {
-        pregunta: "La máxima 'la mora purga la mora' (Art. 1552) significa en contratos bilaterales que:",
-        opciones: ["A. Ninguno está en mora si el otro no cumple o no se allana a cumplir.", "B. La mora perdona intereses.", "C. Hay que demandar dos veces.", "D. No existe mora bilateral."],
+        pregunta: "Para que opere la compensación legal, ambas deudas deben ser, entre otros requisitos:",
+        opciones: ["A. En dinero o cosas fungibles de la misma especie y calidad, y actualmente exigibles.", "B. De obligaciones naturales exclusivamente.", "C. Reconocidas previamente en un juicio declarativo.", "D. Superiores a 50 Unidades de Fomento."],
         correcta: 0,
-        explicacion: "Es la excepción de contrato no cumplido. Uno no puede exigir cumplimiento si él mismo no ha cumplido o está dispuesto a hacerlo."
+        explicacion: "La compensación legal requiere que ambas obligaciones sean de dinero o de cosas fungibles de igual género y calidad; que ambas sean líquidas y actualmente exigibles (Art. 1656)."
+    },
+    {
+        pregunta: "La máxima 'la mora purga la mora' (Art. 1552) significa que en los contratos bilaterales:",
+        opciones: ["A. Ninguno está en mora dejando de cumplir lo pactado, mientras el otro no lo cumple por su parte o no se allana a cumplirlo.", "B. La mora de uno perdona los intereses penales del otro.", "C. El acreedor debe demandar dos veces para constituir en mora.", "D. No existe la mora en los contratos bilaterales."],
+        correcta: 0,
+        explicacion: "Es la excepción de contrato no cumplido. Para que un contratante pueda exigir al otro indemnización o la resolución, él mismo debe haber cumplido su obligación o estar llano a cumplirla."
+    },
+    {
+        pregunta: "En la compraventa, si las partes acuerdan que el precio 'quedará al arbitrio exclusivo del vendedor', el contrato:",
+        opciones: ["A. Es válido y el comprador debe pagar lo que exija el vendedor.", "B. No vale, carece de un requisito esencial.", "C. Es válido si el juez aprueba el precio posteriormente.", "D. Se convierte en una donación."],
+        correcta: 1,
+        explicacion: "El Art. 1809 del Código Civil establece expresamente que el precio no puede dejarse al arbitrio de uno de los contratantes. Si falta el precio, falta un elemento de la esencia y el acto no produce efecto."
     },
     {
         pregunta: "El vendedor de un bien raíz sufre lesión enorme cuando:",
-        opciones: ["A. El precio que recibe es inferior a la mitad del justo precio.", "B. El justo precio es inferior a la mitad de lo pagado.", "C. Vende un mueble por menos del costo.", "D. Es engañado."],
+        opciones: ["A. El precio que recibe es inferior a la mitad del justo precio de la cosa que vende.", "B. El justo precio de la cosa que compra es inferior a la mitad del precio que paga por ella.", "C. Vende una cosa mueble por menos del costo de producción.", "D. Es engañado con violencia física."],
         correcta: 0,
-        explicacion: "Art. 1889: El vendedor sufre lesión enorme si recibe un precio inferior a la mitad del justo precio."
+        explicacion: "El Art. 1889 define la lesión enorme. El vendedor la sufre si recibe un precio inferior a la mitad del justo precio."
     },
     {
-        pregunta: "Los vicios redhibitorios u ocultos dan al comprador el derecho a:",
-        opciones: ["A. Denunciar por estafa.", "B. Exigir la resolución del contrato o rebaja proporcional del precio.", "C. Exigir bien de reemplazo.", "D. Nada."],
+        pregunta: "Los vicios redhibitorios u ocultos en la compraventa dan al comprador el derecho a:",
+        opciones: ["A. Denunciar al vendedor por estafa.", "B. Exigir la resolución del contrato o la rebaja proporcional del precio.", "C. Exigir que se le entregue un bien raíz de reemplazo.", "D. Nada, por el principio de que el comprador debe cuidarse solo."],
         correcta: 1,
-        explicacion: "Arts. 1857 y 1868: Dan origen a la acción redhibitoria (rescindir) o estimatoria (rebajar precio)."
+        explicacion: "Los vicios ocultos dan origen a la acción redhibitoria para rescindir la venta, o a la acción estimatoria para rebajar proporcionalmente el precio (Art. 1857 y 1868)."
     },
     {
-        pregunta: "Para que haya lugar a la indemnización por responsabilidad extracontractual, se requiere:",
-        opciones: ["A. Dolo o culpa, daño, relación de causalidad y capacidad.", "B. Contrato previo y daño.", "C. Daño físico exclusivo.", "D. Ser mayor de edad y delito penal."],
+        pregunta: "El contrato de arrendamiento de cosas es un contrato:",
+        opciones: ["A. Real, que se perfecciona con la entrega de la cosa.", "B. Consensual, que se perfecciona por el solo acuerdo de voluntades.", "C. Solemne, requiere siempre escritura pública.", "D. Unilateral, pues solo el arrendador contrae obligaciones."],
+        correcta: 1,
+        explicacion: "El arrendamiento es un contrato netamente consensual. No requiere entrega ni escritura para perfeccionarse, bastando el acuerdo en la cosa y en la renta."
+    },
+    {
+        pregunta: "La hipoteca otorga al acreedor hipotecario los derechos de:",
+        opciones: ["A. Uso, goce y disposición sobre el inmueble.", "B. Venta privada directa sin intervención judicial.", "C. Persecución (contra quien la posea) y de preferencia (en el pago).", "D. Arrendar el inmueble hipotecado y quedarse con los frutos."],
+        correcta: 2,
+        explicacion: "La hipoteca otorga al acreedor el derecho de perseguir la finca en manos de quien se encuentre y el derecho a pagarse con preferencia a otros acreedores."
+    },
+    {
+        pregunta: "Para que haya lugar a la indemnización por responsabilidad extracontractual, se requiere copulativamente:",
+        opciones: ["A. Dolo o culpa, daño, relación de causalidad y capacidad del autor.", "B. Un contrato previo incumplido y daño patrimonial.", "C. Exclusivamente la prueba de un daño físico.", "D. Que el autor sea mayor de 18 años y cometa un delito penal."],
         correcta: 0,
-        explicacion: "Arts. 2314 y ss: Acción/omisión culpable o dolosa, capacidad civil, daño y nexo causal."
+        explicacion: "La responsabilidad extracontractual (Arts. 2314 y ss) exige la concurrencia de cuatro elementos: acción u omisión culpable o dolosa, capacidad civil, existencia de un daño y nexo causal."
     },
     {
-        pregunta: "Si la víctima se expuso imprudentemente al daño, el juez debe:",
-        opciones: ["A. Eximir de responsabilidad al autor.", "B. Reducir prudencialmente la indemnización.", "C. Obligar a la víctima a pagar.", "D. Ignorarlo."],
+        pregunta: "Si dos o más personas cometen conjuntamente un delito o cuasidelito civil:",
+        opciones: ["A. Responden por partes iguales.", "B. Son solidariamente responsables de todo perjuicio.", "C. El juez determina quién es el más culpable y solo él paga.", "D. El Estado asume subsidiariamente el pago."],
         correcta: 1,
-        explicacion: "Art. 2330: La apreciación del daño está sujeta a reducción por exposición imprudente (concurrencia de culpas)."
+        explicacion: "El Art. 2317 consagra una regla excepcional: si un delito o cuasidelito ha sido cometido por dos o más personas, cada una de ellas será solidariamente responsable de todo perjuicio."
+    },
+    {
+        pregunta: "Si una maceta cae desde el balcón de un edificio y lesiona a un peatón, la ley presume:",
+        opciones: ["A. Culpabilidad de todas las personas que habitan la parte del edificio de donde cayó.", "B. El peatón debe probar la culpa exacta de quien la tiró.", "C. Es un caso fortuito, nadie responde.", "D. Responde el arquitecto del edificio."],
+        correcta: 0,
+        explicacion: "El daño causado por una cosa que cae de la parte superior de un edificio es imputable a todas las personas que habitan la misma parte, dividiéndose la indemnización entre todas (Art. 2328)."
+    },
+    {
+        pregunta: "Si la víctima se expuso imprudentemente al daño (por ejemplo, cruzó con luz roja y fue atropellada):",
+        opciones: ["A. El conductor queda totalmente eximido de responsabilidad.", "B. El juez debe reducir prudencialmente la indemnización.", "C. El peatón debe indemnizar al conductor.", "D. No tiene efecto en materia civil."],
+        correcta: 1,
+        explicacion: "Es la hipótesis del Art. 2330. La apreciación del daño está sujeta a reducción si el que lo ha sufrido se expuso a él imprudentemente (concurrencia de culpas)."
+    },
+    {
+        pregunta: "En el régimen de participación en los gananciales, durante su vigencia:",
+        opciones: ["A. Los cónyuges administran en conjunto todos los bienes.", "B. El marido administra los bienes de ambos.", "C. Cada cónyuge administra su patrimonio libremente, como si estuvieran separados de bienes.", "D. Ninguno puede enajenar inmuebles sin autorización del juez."],
+        correcta: 2,
+        explicacion: "Durante la vigencia de este régimen, funciona como una separación total de bienes. Solo al término del régimen se calculan los patrimonios para la compensación (Art. 1792-1 y ss)."
+    },
+    {
+        pregunta: "¿Cuál es el principal efecto de la declaración de un inmueble como 'bien familiar'?",
+        opciones: ["A. Pasa a ser propiedad de los hijos comunes.", "B. No se puede enajenar ni gravar sin el consentimiento del cónyuge no propietario.", "C. Se vuelve inembargable de forma absoluta.", "D. Queda exento del pago de contribuciones."],
+        correcta: 1,
+        explicacion: "El cónyuge dueño no puede vender, hipotecar o arrendar la propiedad sin la autorización específica del otro cónyuge. No es inembargable de forma absoluta, pero la familia goza del beneficio de excusión."
+    },
+    {
+        pregunta: "El patrimonio reservado de la mujer casada (Art. 150) opera bajo sociedad conyugal y requiere que la mujer:",
+        opciones: ["A. Haya aportado bienes inmuebles antes del matrimonio.", "B. Reciba una herencia durante el matrimonio.", "C. Ejerza un trabajo remunerado separado de su marido.", "D. Tenga capitulaciones matrimoniales."],
+        correcta: 2,
+        explicacion: "El Art. 150 señala que la mujer casada que ejerce una profesión, oficio o industria separados de su marido, se mirará como separada de bienes respecto de lo adquirido fruto de ese trabajo."
     },
     {
         pregunta: "La sucesión en los bienes de una persona se abre:",
-        opciones: ["A. Al dictarse posesión efectiva.", "B. En el momento exacto de su muerte, en su último domicilio.", "C. Al aceptar la herencia.", "D. Al pagar el impuesto."],
+        opciones: ["A. Al momento en que se dicta la posesión efectiva.", "B. En el momento exacto de su muerte, en su último domicilio.", "C. Cuando los herederos aceptan la herencia ante notario.", "D. Cuando se paga el impuesto de herencias."],
         correcta: 1,
-        explicacion: "Art. 955 CC: La sucesión se abre en el momento de la muerte y en su último domicilio."
+        explicacion: "Según el Art. 955 del Código Civil, la sucesión se abre en el momento de la muerte del causante y en su último domicilio."
     },
     {
-        pregunta: "En la sucesión intestada, el 'derecho de representación' permite a:",
-        opciones: ["A. Un abogado comparecer.", "B. Los hijos ocupar el lugar de su padre/madre que no quiso o no pudo suceder.", "C. Al cónyuge representar hijos.", "D. Al legatario exigir su cosa."],
+        pregunta: "Son asignaciones forzosas en el derecho chileno, que el testador está obligado a respetar:",
+        opciones: ["A. Los alimentos que se deben por ley, las legítimas y la cuarta de mejoras.", "B. La mitad legitimaria exclusivamente.", "C. Solo los legados a favor del Fisco.", "D. La cuarta de libre disposición."],
+        correcta: 0,
+        explicacion: "El Art. 1167 define las asignaciones forzosas. El testador está obligado a hacerlas: los alimentos debidos por ley, las legítimas y la cuarta de mejoras."
+    },
+    {
+        pregunta: "En la sucesión intestada, el 'derecho de representación' es una ficción legal que permite a:",
+        opciones: ["A. Un abogado comparecer en representación de los herederos ausentes.", "B. Los hijos ocupar el lugar y grado de su padre o madre que no quiso o no pudo suceder.", "C. El cónyuge sobreviviente representar a los hijos menores.", "D. Un legatario exigir la entrega de su cosa."],
         correcta: 1,
-        explicacion: "Art. 984: Los descendientes suben a ocupar el lugar del padre/madre premuerto, incapaz o que repudió."
+        explicacion: "Definido en el Art. 984. Los descendientes suben a ocupar el lugar de su padre/madre premuerto, incapaz o que repudió la herencia, para recibir la porción que a este le habría correspondido."
     }
 ];
 
@@ -451,9 +554,9 @@ app.post('/api/quiz/generar', async (req, res) => {
         const indexAleatorio = Math.floor(Math.random() * totalPreguntas);
         const preguntaData = bancoPreguntasAlucilex[indexAleatorio];
         
-        let artData = { numero: "Dogmática", texto: "Analizando fundamentos del Código Civil." };
+        let artData = { numero: "Dogmática General", texto: "Analizando fundamentos esenciales del Código Civil Chileno para el caso práctico." };
         
-        // Petición a Supabase sin bloquear (timeout natural)
+        // Petición no bloqueante a Supabase (usa try-catch independiente)
         try {
             const artAleatorio = Math.floor(Math.random() * 2524) + 1;
             const { data } = await supabase.from('fragmentos_legales')
@@ -462,10 +565,10 @@ app.post('/api/quiz/generar', async (req, res) => {
                 .eq('metadatos->>articulo', String(artAleatorio))
                 .limit(1);
             if (data && data.length > 0) {
-                artData = { numero: artAleatorio, texto: data[0].contenido };
+                artData = { numero: artAleatorio, texto: data[0].contenido.replace(/\[.*?\]/g, '').trim() };
             }
         } catch (e) {
-            console.log("Quiz: Fallo al obtener artículo de fondo, usando default.");
+            console.log("Quiz: Fallo menor al obtener artículo aleatorio, se usará texto por defecto.");
         }
 
         res.json({
@@ -480,13 +583,13 @@ app.post('/api/quiz/generar', async (req, res) => {
 
     } catch (error) {
         console.error('Error Crítico en Generador de Quiz:', error);
-        res.status(500).json({ error: 'Error interno al generar pregunta.' });
+        res.status(500).json({ error: 'Error interno al generar pregunta de evaluación.' });
     }
 });
 
 // Rutas de mantenimiento
 app.get('/ping', (req, res) => res.status(200).send('OK'));
-app.get('/', (req, res) => res.send('API de Alucilex funcionando (Motor Híbrido).'));
+app.get('/', (req, res) => res.send('API de Alucilex funcionando (Motor de Streaming Agresivo e Íntegro).'));
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor ALUCILEX Totalmente Blindado en puerto ${PORT}`));
