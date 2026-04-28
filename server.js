@@ -209,11 +209,10 @@ app.post('/api/consultar', async (req, res) => {
     });
 
     if (respuestaCacheada && Date.now() - respuestaCacheada.timestamp < TTL_RESPUESTA) {
-        // Si está en caché, simular el efecto de máquina de escribir dividiendo el texto
         const words = respuestaCacheada.respuesta.split(' ');
         for (let i = 0; i < words.length; i++) {
             res.write(`data: ${JSON.stringify({ content: words[i] + ' ' })}\n\n`);
-            await new Promise(r => setTimeout(r, 20)); // Pequeña pausa para efecto visual
+            await new Promise(r => setTimeout(r, 20));
         }
         res.write('data: [DONE]\n\n');
         res.end();
@@ -229,7 +228,6 @@ app.post('/api/consultar', async (req, res) => {
     let articuloObjeto = null;
     let articuloContenido = "";
     
-    // Primero buscar explícitamente un número en el texto
     const matchNumero = pregunta.match(/(?:art(?:[íi]culo|\.?)?\s*)?(\d{1,4})(?!\d)/i);
     if (matchNumero && matchNumero[1]) {
         numeroArticuloDetectado = matchNumero[1];
@@ -238,7 +236,7 @@ app.post('/api/consultar', async (req, res) => {
         if (fromDic) numeroArticuloDetectado = fromDic.toString();
     }
 
-    // 2. Ejecutar búsquedas en paralelo para no hacer esperar al usuario
+    // 2. Ejecutar búsquedas en paralelo
     let embeddingPromise = null;
     if (cacheEmbeddings.has(hashPregunta)) {
         embeddingPromise = Promise.resolve(cacheEmbeddings.get(hashPregunta));
@@ -252,7 +250,6 @@ app.post('/api/consultar', async (req, res) => {
 
     let articuloPromise = numeroArticuloDetectado ? buscarArticuloPorNumero(numeroArticuloDetectado) : Promise.resolve(null);
 
-    // Esperar resultados de BD y Embeddings
     const [articuloResult, embeddingResult] = await Promise.all([articuloPromise, embeddingPromise]);
     
     if (articuloResult) {
@@ -267,32 +264,35 @@ app.post('/api/consultar', async (req, res) => {
     }
 
     let contextoDoctrina = doctrinaTextos.length ? doctrinaTextos.join('\n\n---\n\n') : '';
-    let contextoTotal = `### ARTÍCULO DEL CÓDIGO CIVIL RECUPERADO:\n${articuloContenido || "Vacío"}\n\n### DOCTRINA RECUPERADA:\n${contextoDoctrina}`;
+    let contextoTotal = `### ARTÍCULO RECUPERADO:\n${articuloContenido || "Vacío"}\n\n### DOCTRINA RECUPERADA:\n${contextoDoctrina}`;
 
-    // 3. Prompt del sistema mejorado para evitar alucinaciones y textos basura
+    // 3. EL NUEVO PROMPT OBLIGATORIO: MODO CATEDRÁTICO MAGISTRAL
     const systemPrompt = 
-        "Eres Alucilex, un catedrático experto de Derecho Civil chileno. Respondes con profundidad académica, como si dictaras una clase.\n\n" +
+        "Eres Alucilex, un ilustre y exigente catedrático de Derecho Civil de una prestigiosa universidad chilena. " +
+        "Tu misión es dictar una CÁTEDRA MAGISTRAL Y EXHAUSTIVA. Tienes 5000 tokens disponibles, ¡ÚSALOS PARA EXPLAYARTE!\n\n" +
         "REGLAS ESTRICTAS E INQUEBRANTABLES:\n" +
-        "1. **CITA LIMPIA:** Empieza tu respuesta transcribiendo directamente el artículo aplicable del Código Civil de Chile, utilizando el formato '📜 **Art. [Número] del Código Civil:** [Texto del artículo]'.\n" +
-        "2. **AUTONOMÍA DE CONOCIMIENTO:** Si el contexto de la base de datos dice 'Vacío', o contiene frases como 'Este artículo aún no ha sido cargado', IGNÓRALO POR COMPLETO. Eres un experto, transcribe el artículo desde tu propio conocimiento legal oficial.\n" +
-        "3. **ESTRUCTURA OBLIGATORIA:** Después del artículo, desarrolla conectadamente en prosa: Concepto doctrinal, Elementos o requisitos, Características principales y Ejemplos prácticos.\n" +
-        "4. **PROHIBIDO:** No uses esquemas, viñetas cortas ni frases pidiendo disculpas o informando errores de base de datos. Sé directo y magisterial.";
+        "1. **PROHIBIDO SER ESCUETO:** Tus respuestas DEBEN ser largas, profundas y analíticas (mínimo 5 a 6 párrafos bien desarrollados). NUNCA des respuestas breves.\n" +
+        "2. **CITA LIMPIA:** Empieza tu respuesta transcribiendo directamente el artículo aplicable del Código Civil, formato: '📜 **Art. [Número] del Código Civil:** [Texto]'.\n" +
+        "3. **BASAMENTO DOCTRINAL OBLIGATORIO:** Tienes la obligación de fundar tus conocimientos y citar a los grandes profesores del Derecho Chileno. Dependiendo de la materia, DEBES mencionar e integrar los criterios de: Arturo Alessandri, Manuel Somarriva, René Ramos Pazos, Víctor Vial del Río, Pablo Rodríguez Grez, Agustín Squella o Luis Claro Solar.\n" +
+        "4. **ESTRUCTURA DE CLASE:** Debes estructurar tu respuesta desarrollando a cabalidad: Naturaleza jurídica, Concepto doctrinal, Elementos y Requisitos, Características principales, y Ejemplos prácticos o aplicación jurisprudencial.\n" +
+        "5. **AUTONOMÍA DE EXPERTO:** Si el contexto dice 'Vacío', ignóralo totalmente. Utiliza tu vasto conocimiento preentrenado del Código Civil chileno y su doctrina. No pidas disculpas ni digas que falta información, tú eres la autoridad.\n" +
+        "6. **PROHIBIDO:** No uses listas cortas ni viñetas simples. Redacta en prosa académica densa y conectada.";
 
     let mensajes = [{ role: "system", content: systemPrompt }];
     for (let msg of historial) mensajes.push(msg);
     mensajes.push({
         role: "user",
-        content: `${contextoTotal}\n\nPregunta del alumno: ${pregunta}\n\nResponde aplicando todas tus reglas.`
+        content: `${contextoTotal}\n\nPregunta del alumno: ${pregunta}\n\nDicta tu cátedra completa ahora.`
     });
 
     let respuestaFinal = "";
 
     try {
-        // Aquí empieza verdaderamente el Streaming (letra por letra desde el LLM)
+        // Se sube la temperatura a 0.4 para darle mayor fluidez y expansividad al texto
         const stream = await openai.chat.completions.create({
             model: "deepseek/deepseek-chat",
             messages: mensajes,
-            temperature: 0.2,
+            temperature: 0.4, 
             max_tokens: 5000,
             stream: true,
         });
@@ -300,7 +300,6 @@ app.post('/api/consultar', async (req, res) => {
         for await (const chunk of stream) {
             const content = chunk.choices[0]?.delta?.content || "";
             respuestaFinal += content;
-            // Se envía inmediatamente al frontend
             res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
     } catch (err) {
@@ -582,7 +581,7 @@ app.post('/api/quiz/generar', async (req, res) => {
 });
 
 app.get('/ping', (req, res) => res.status(200).send('OK'));
-app.get('/', (req, res) => res.send('API de Alucilex funcionando.'));
+app.get('/', (req, res) => res.send('API de Alucilex funcionando (Modo Cátedra).'));
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Servidor ALUCILEX Totalmente Blindado en puerto ${PORT}`));
