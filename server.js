@@ -172,36 +172,42 @@ async function buscarArticuloPorNumero(numero) {
             .limit(1);
         if (!error && data && data.length > 0) return data[0];
     } catch (e) {
-        console.error("Error buscando articulo:", e.message);
+        console.error("[❌ ERROR SUPABASE LEY]:", e.message);
     }
     return null;
 }
 
-async function buscarDoctrina(embedding, limite = 15) { // AUMENTADO A 15 FRAGMENTOS
+async function buscarDoctrina(embedding, limite = 15) {
     try {
         const { data, error } = await supabase.rpc('buscar_fragmentos', {
             query_embedding: embedding,
             filtro_tipo: 'doctrina',
-            match_threshold: 0.12, // DRÁSTICAMENTE REDUCIDO PARA FORZAR QUE SIEMPRE ENCUENTRE APUNTES
+            match_threshold: 0.12,
             match_count: limite
         });
         if (!error && data) return data;
     } catch (e) {
-        console.error("Error buscando doctrina:", e.message);
+        console.error("[❌ ERROR SUPABASE DOCTRINA]:", e.message);
     }
     return [];
 }
 
-// ===================== ENDPOINT PRINCIPAL (PURO EFECTO MÁQUINA DE ESCRIBIR) =====================
+// ===================== ENDPOINT PRINCIPAL (CON TELEMETRÍA) =====================
 app.post('/api/consultar', async (req, res) => {
     const { pregunta, sessionId } = req.body;
-    if (!pregunta) return res.status(400).json({ error: "Pregunta vacía" });
-    if (!sessionId) return res.status(400).json({ error: "Se requiere sessionId" });
+    
+    console.log(`\n=========================================`);
+    console.log(`[🚀 NUEVA CONSULTA] Sesión: ${sessionId || 'Desconocida'}`);
+    console.log(`[🗣️ USUARIO] Pregunta: "${pregunta}"`);
+
+    if (!pregunta) {
+        console.log(`[⚠️ ADVERTENCIA] Pregunta vacía recibida.`);
+        return res.status(400).json({ error: "Pregunta vacía" });
+    }
 
     const hashPregunta = hashTexto(pregunta);
     const respuestaCacheada = cacheRespuestas.get(hashPregunta);
     
-    // Preparar encabezados para Streaming en tiempo real
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -209,6 +215,7 @@ app.post('/api/consultar', async (req, res) => {
     });
 
     if (respuestaCacheada && Date.now() - respuestaCacheada.timestamp < TTL_RESPUESTA) {
+        console.log(`[⚡ CACHÉ] Respondiendo desde la memoria rápida.`);
         const words = respuestaCacheada.respuesta.split(' ');
         for (let i = 0; i < words.length; i++) {
             res.write(`data: ${JSON.stringify({ content: words[i] + ' ' })}\n\n`);
@@ -216,6 +223,7 @@ app.post('/api/consultar', async (req, res) => {
         }
         res.write('data: [DONE]\n\n');
         res.end();
+        console.log(`=========================================\n`);
         return;
     }
 
@@ -236,6 +244,12 @@ app.post('/api/consultar', async (req, res) => {
         if (fromDic) numeroArticuloDetectado = fromDic.toString();
     }
 
+    if (numeroArticuloDetectado) {
+        console.log(`[🎯 DICCIONARIO] Artículo detectado para buscar: ${numeroArticuloDetectado}`);
+    } else {
+        console.log(`[🔍 DICCIONARIO] No se detectó artículo específico en la pregunta.`);
+    }
+
     // 2. Ejecutar búsquedas en paralelo
     let embeddingPromise = null;
     if (cacheEmbeddings.has(hashPregunta)) {
@@ -245,7 +259,13 @@ app.post('/api/consultar', async (req, res) => {
             model: 'openai/text-embedding-3-small',
             input: pregunta.substring(0, 8000),
             dimensions: 768
-        }).then(res => res.data[0].embedding).catch(() => null);
+        }).then(res => {
+            console.log(`[🧠 EMBEDDING] Vector semántico generado correctamente.`);
+            return res.data[0].embedding;
+        }).catch(err => {
+            console.error(`[❌ ERROR EMBEDDING] ${err.message}`);
+            return null;
+        });
     }
 
     let articuloPromise = numeroArticuloDetectado ? buscarArticuloPorNumero(numeroArticuloDetectado) : Promise.resolve(null);
@@ -254,6 +274,9 @@ app.post('/api/consultar', async (req, res) => {
     
     if (articuloResult) {
         articuloContenido = articuloResult.contenido.replace(/\[.*?\]/g, '').trim();
+        console.log(`[📜 LEY] ¡Éxito! Artículo ${numeroArticuloDetectado} extraído de Supabase.`);
+    } else if (numeroArticuloDetectado) {
+        console.log(`[⚠️ LEY] El Artículo ${numeroArticuloDetectado} no se encontró en la base de datos local.`);
     }
 
     let doctrinaTextos = [];
@@ -261,12 +284,13 @@ app.post('/api/consultar', async (req, res) => {
         cacheEmbeddings.set(hashPregunta, embeddingResult);
         const resultadosDoctrina = await buscarDoctrina(embeddingResult, 15);
         doctrinaTextos = resultadosDoctrina.map(f => f.contenido || f.texto || '');
+        console.log(`[📚 DOCTRINA] El Sabueso recuperó ${resultadosDoctrina.length} fragmentos de apuntes.`);
     }
 
     let contextoDoctrina = doctrinaTextos.length ? doctrinaTextos.join('\n\n---\n\n') : '';
     let contextoTotal = `### APUNTES DEL ESTUDIANTE ENCONTRADOS EN BASE DE DATOS:\n${contextoDoctrina}\n\n### TEXTO DEL CÓDIGO CIVIL RECUPERADO:\n${articuloContenido || "Vacío"}`;
 
-    // 3. EL NUEVO PROMPT EXTREMO: FUERZA BRUTA PARA EXTENSIÓN Y PRECISIÓN
+    // 3. EL PROMPT EXTREMO CATEDRÁTICO
     const systemPrompt = 
         "Eres Alucilex, el Catedrático Titular de Derecho Civil más erudito, exigente y exhaustivo de Chile. " +
         "Esta es una CÁTEDRA MAGISTRAL UNIVERSITARIA. Tu respuesta DEBE ser un tratado monumental. " +
@@ -294,7 +318,7 @@ app.post('/api/consultar', async (req, res) => {
     let respuestaFinal = "";
 
     try {
-        // Temperatura a 0.6 para máxima capacidad de expansión sin perder lógica jurídica
+        console.log(`[🤖 IA] Iniciando generación de cátedra magistral...`);
         const stream = await openai.chat.completions.create({
             model: "deepseek/deepseek-chat",
             messages: mensajes,
@@ -308,13 +332,15 @@ app.post('/api/consultar', async (req, res) => {
             respuestaFinal += content;
             res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
+        console.log(`[✅ RESPUESTA] Cátedra generada y enviada al alumno exitosamente (${respuestaFinal.length} caracteres).`);
     } catch (err) {
-        console.error("Error OpenAI Stream:", err.message);
+        console.error(`[❌ ERROR IA] Falló la generación de OpenAI/DeepSeek: ${err.message}`);
         res.write(`data: ${JSON.stringify({ content: "\n\n❌ Hubo una interrupción en la conexión. Por favor, reintenta." })}\n\n`);
     }
 
     res.write('data: [DONE]\n\n');
     res.end();
+    console.log(`=========================================\n`);
 
     if(respuestaFinal.length > 50){
         cacheRespuestas.set(hashPregunta, { respuesta: respuestaFinal, timestamp: Date.now() });
@@ -549,6 +575,7 @@ const bancoPreguntasAlucilex = [
 ];
 
 app.post('/api/quiz/generar', async (req, res) => {
+    console.log(`\n[🎲 QUIZ] Solicitud de nueva pregunta generada.`);
     try {
         const totalPreguntas = bancoPreguntasAlucilex.length;
         const indexAleatorio = Math.floor(Math.random() * totalPreguntas);
@@ -567,7 +594,7 @@ app.post('/api/quiz/generar', async (req, res) => {
                 artData = { numero: artAleatorio, texto: data[0].contenido.replace(/\[.*?\]/g, '').trim() };
             }
         } catch (e) {
-            console.log("Quiz: Fallo menor al obtener artículo aleatorio, se usará texto por defecto.");
+            // Silenciado para no llenar los logs en consultas secundarias
         }
 
         res.json({
@@ -581,13 +608,13 @@ app.post('/api/quiz/generar', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error Crítico en Generador de Quiz:', error);
-        res.status(500).json({ error: 'Error interno al generar pregunta de evaluación.' });
+        console.error('[❌ ERROR QUIZ]:', error);
+        res.status(500).json({ error: 'Error interno al generar pregunta.' });
     }
 });
 
 app.get('/ping', (req, res) => res.status(200).send('OK'));
-app.get('/', (req, res) => res.send('API de Alucilex funcionando (Modo Cátedra Magistral Extensa).'));
+app.get('/', (req, res) => res.send('API de Alucilex funcionando (Con Telemetría Visual).'));
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Servidor ALUCILEX Totalmente Blindado en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado en puerto ${PORT}`));
