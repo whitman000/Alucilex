@@ -585,4 +585,4 @@ app.get('/ping', (req, res) => res.status(200).send('OK'));
 app.get('/', (req, res) => res.send('API de Alucilex funcionando.'));
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Servidor ALUCILEX Totalmente Blindado en puerto ${PORT}`));ss
+app.listen(PORT, () => console.log(`Servidor ALUCILEX Totalmente Blindado en puerto ${PORT}`));
