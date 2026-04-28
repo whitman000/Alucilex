@@ -18,7 +18,6 @@ const openai = new OpenAI({
 const cacheRespuestas = new Map();
 const cacheEmbeddings = new Map();
 const conversaciones = new Map();
-const cachePreguntasQuiz = new Map();
 const TTL_RESPUESTA = 3600000;
 const MAX_HISTORIAL = 10;
 
@@ -193,7 +192,7 @@ async function buscarDoctrina(embedding, limite = 8) {
     return [];
 }
 
-// ===================== ENDPOINT PRINCIPAL (STREAMING AGRESIVO) =====================
+// ===================== ENDPOINT PRINCIPAL (PURO EFECTO MÁQUINA DE ESCRIBIR) =====================
 app.post('/api/consultar', async (req, res) => {
     const { pregunta, sessionId } = req.body;
     if (!pregunta) return res.status(400).json({ error: "Pregunta vacía" });
@@ -201,9 +200,21 @@ app.post('/api/consultar', async (req, res) => {
 
     const hashPregunta = hashTexto(pregunta);
     const respuestaCacheada = cacheRespuestas.get(hashPregunta);
+    
+    // Preparar encabezados para Streaming en tiempo real
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive'
+    });
+
     if (respuestaCacheada && Date.now() - respuestaCacheada.timestamp < TTL_RESPUESTA) {
-        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
-        res.write(`data: ${JSON.stringify({ content: respuestaCacheada.respuesta })}\n\n`);
+        // Si está en caché, simular el efecto de máquina de escribir dividiendo el texto
+        const words = respuestaCacheada.respuesta.split(' ');
+        for (let i = 0; i < words.length; i++) {
+            res.write(`data: ${JSON.stringify({ content: words[i] + ' ' })}\n\n`);
+            await new Promise(r => setTimeout(r, 20)); // Pequeña pausa para efecto visual
+        }
         res.write('data: [DONE]\n\n');
         res.end();
         return;
@@ -213,18 +224,13 @@ app.post('/api/consultar', async (req, res) => {
     let historial = conversaciones.get(sessionId);
     if (historial.length > MAX_HISTORIAL) historial = historial.slice(-MAX_HISTORIAL);
 
-    res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive'
-    });
-
-    // Detectar número de artículo
+    // 1. Detectar número de artículo
     let numeroArticuloDetectado = null;
     let articuloObjeto = null;
     let articuloContenido = "";
-    const matchNumero = pregunta.match(/(?:art(?:[íi]culo|\.?)?\s*)?(\d{1,4})(?!\d)/i);
     
+    // Primero buscar explícitamente un número en el texto
+    const matchNumero = pregunta.match(/(?:art(?:[íi]culo|\.?)?\s*)?(\d{1,4})(?!\d)/i);
     if (matchNumero && matchNumero[1]) {
         numeroArticuloDetectado = matchNumero[1];
     } else {
@@ -232,70 +238,57 @@ app.post('/api/consultar', async (req, res) => {
         if (fromDic) numeroArticuloDetectado = fromDic.toString();
     }
 
-    if (numeroArticuloDetectado) {
-        articuloObjeto = await buscarArticuloPorNumero(numeroArticuloDetectado);
-        if (articuloObjeto) {
-            articuloContenido = articuloObjeto.contenido.replace(/\[.*?\]/g, '').trim();
-            // STREAMING AGRESIVO: Enviar artículo inmediatamente para que no se vea pegado
-            res.write(`data: ${JSON.stringify({ content: `📜 **Art. ${numeroArticuloDetectado} del Código Civil**\n\n${articuloContenido}\n\n---\n\n` })}\n\n`);
-        }
-    }
-
-    // Generar embedding
-    let embedding = null;
+    // 2. Ejecutar búsquedas en paralelo para no hacer esperar al usuario
+    let embeddingPromise = null;
     if (cacheEmbeddings.has(hashPregunta)) {
-        embedding = cacheEmbeddings.get(hashPregunta);
+        embeddingPromise = Promise.resolve(cacheEmbeddings.get(hashPregunta));
     } else {
-        try {
-            const embeddingResponse = await openai.embeddings.create({
-                model: 'openai/text-embedding-3-small',
-                input: pregunta.substring(0, 8000),
-                dimensions: 768
-            });
-            embedding = embeddingResponse.data[0].embedding;
-            cacheEmbeddings.set(hashPregunta, embedding);
-        } catch (err) {
-            console.log("Error embedding:", err.message);
-        }
+        embeddingPromise = openai.embeddings.create({
+            model: 'openai/text-embedding-3-small',
+            input: pregunta.substring(0, 8000),
+            dimensions: 768
+        }).then(res => res.data[0].embedding).catch(() => null);
     }
 
-    // Buscar doctrina
+    let articuloPromise = numeroArticuloDetectado ? buscarArticuloPorNumero(numeroArticuloDetectado) : Promise.resolve(null);
+
+    // Esperar resultados de BD y Embeddings
+    const [articuloResult, embeddingResult] = await Promise.all([articuloPromise, embeddingPromise]);
+    
+    if (articuloResult) {
+        articuloContenido = articuloResult.contenido.replace(/\[.*?\]/g, '').trim();
+    }
+
     let doctrinaTextos = [];
-    if (embedding) {
-        const resultados = await buscarDoctrina(embedding, 8); // Ajustado para evitar Data Flood
-        doctrinaTextos = resultados.map(f => f.contenido || f.texto || '');
+    if (embeddingResult) {
+        cacheEmbeddings.set(hashPregunta, embeddingResult);
+        const resultadosDoctrina = await buscarDoctrina(embeddingResult, 8);
+        doctrinaTextos = resultadosDoctrina.map(f => f.contenido || f.texto || '');
     }
 
-    let contextoDoctrina = doctrinaTextos.length ? doctrinaTextos.join('\n\n---\n\n') : 'No se encontraron apuntes doctrinales relevantes.';
-    let contextoTotal = `### ARTÍCULO DEL CÓDIGO CIVIL:\n${articuloContenido || "No se detectó artículo exacto."}\n\n### DOCTRINA:\n${contextoDoctrina}`;
+    let contextoDoctrina = doctrinaTextos.length ? doctrinaTextos.join('\n\n---\n\n') : '';
+    let contextoTotal = `### ARTÍCULO DEL CÓDIGO CIVIL RECUPERADO:\n${articuloContenido || "Vacío"}\n\n### DOCTRINA RECUPERADA:\n${contextoDoctrina}`;
 
-    // Prompt del sistema con todas las reglas originales
+    // 3. Prompt del sistema mejorado para evitar alucinaciones y textos basura
     const systemPrompt = 
-        "Eres Alucilex, un catedrático de Derecho Civil chileno. Debes responder con profundidad académica, como si dictaras una clase.\n\n" +
-        "REGLAS ESTRICTAS:\n" +
-        "1. **TRANSCRIPCIÓN LITERAL:** Si tienes el artículo exacto en el contexto, inicia citándolo literalmente (aunque ya se haya mostrado al usuario).\n" +
-        "2. **DESARROLLO OBLIGATORIO:** Desarrolla los siguientes apartados con al menos 2-3 párrafos cada uno:\n" +
-        "   - ### Concepto doctrinal\n" +
-        "   - ### Elementos o requisitos\n" +
-        "   - ### Características principales\n" +
-        "   - ### Clasificaciones (si corresponde)\n" +
-        "   - ### Integración con otras instituciones del Código Civil\n" +
-        "   - ### Ejemplos prácticos\n" +
-        "   - ### Conclusión\n" +
-        "3. **PROHIBIDO:** Responder con esquemas o listas cortas. Redacta en prosa académica conectada.\n" +
-        "4. **CITA FUENTES:** Si usas doctrina, indícalo. Al final agrega '### Fuentes utilizadas'.\n" +
-        "5. **CONOCIMIENTO AUTÓNOMO:** Si el contexto está vacío, extrae toda la respuesta de tu propio entrenamiento oficial sobre el Código Civil de Chile. NUNCA digas 'no tengo información'.";
+        "Eres Alucilex, un catedrático experto de Derecho Civil chileno. Respondes con profundidad académica, como si dictaras una clase.\n\n" +
+        "REGLAS ESTRICTAS E INQUEBRANTABLES:\n" +
+        "1. **CITA LIMPIA:** Empieza tu respuesta transcribiendo directamente el artículo aplicable del Código Civil de Chile, utilizando el formato '📜 **Art. [Número] del Código Civil:** [Texto del artículo]'.\n" +
+        "2. **AUTONOMÍA DE CONOCIMIENTO:** Si el contexto de la base de datos dice 'Vacío', o contiene frases como 'Este artículo aún no ha sido cargado', IGNÓRALO POR COMPLETO. Eres un experto, transcribe el artículo desde tu propio conocimiento legal oficial.\n" +
+        "3. **ESTRUCTURA OBLIGATORIA:** Después del artículo, desarrolla conectadamente en prosa: Concepto doctrinal, Elementos o requisitos, Características principales y Ejemplos prácticos.\n" +
+        "4. **PROHIBIDO:** No uses esquemas, viñetas cortas ni frases pidiendo disculpas o informando errores de base de datos. Sé directo y magisterial.";
 
     let mensajes = [{ role: "system", content: systemPrompt }];
     for (let msg of historial) mensajes.push(msg);
     mensajes.push({
         role: "user",
-        content: `${contextoTotal}\n\nPregunta del usuario: ${pregunta}\n\nRecuerda desarrollar la cátedra completa.`
+        content: `${contextoTotal}\n\nPregunta del alumno: ${pregunta}\n\nResponde aplicando todas tus reglas.`
     });
 
     let respuestaFinal = "";
 
     try {
+        // Aquí empieza verdaderamente el Streaming (letra por letra desde el LLM)
         const stream = await openai.chat.completions.create({
             model: "deepseek/deepseek-chat",
             messages: mensajes,
@@ -303,14 +296,16 @@ app.post('/api/consultar', async (req, res) => {
             max_tokens: 5000,
             stream: true,
         });
+
         for await (const chunk of stream) {
             const content = chunk.choices[0]?.delta?.content || "";
             respuestaFinal += content;
+            // Se envía inmediatamente al frontend
             res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
     } catch (err) {
         console.error("Error OpenAI Stream:", err.message);
-        res.write(`data: ${JSON.stringify({ content: "\n\n❌ Error temporal de conexión con la IA. Intenta de nuevo." })}\n\n`);
+        res.write(`data: ${JSON.stringify({ content: "\n\n❌ Hubo una interrupción en la conexión. Por favor, reintenta." })}\n\n`);
     }
 
     res.write('data: [DONE]\n\n');
@@ -364,7 +359,7 @@ const mapeoTemas = {
     ]
 };
 
-// BANCO DE PREGUNTAS ORIGINAL (INTACTO, SIN RESUMEN)
+// BANCO DE PREGUNTAS ORIGINAL
 const bancoPreguntasAlucilex = [
     {
         pregunta: "Juan le dona a Pedro un automóvil con la condición de que este último 'no se case nunca'. Según el Código Civil chileno, ¿cuál es el efecto de esta condición?",
@@ -556,7 +551,6 @@ app.post('/api/quiz/generar', async (req, res) => {
         
         let artData = { numero: "Dogmática General", texto: "Analizando fundamentos esenciales del Código Civil Chileno para el caso práctico." };
         
-        // Petición no bloqueante a Supabase (usa try-catch independiente)
         try {
             const artAleatorio = Math.floor(Math.random() * 2524) + 1;
             const { data } = await supabase.from('fragmentos_legales')
@@ -587,9 +581,8 @@ app.post('/api/quiz/generar', async (req, res) => {
     }
 });
 
-// Rutas de mantenimiento
 app.get('/ping', (req, res) => res.status(200).send('OK'));
-app.get('/', (req, res) => res.send('API de Alucilex funcionando (Motor de Streaming Agresivo e Íntegro).'));
+app.get('/', (req, res) => res.send('API de Alucilex funcionando.'));
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Servidor ALUCILEX Totalmente Blindado en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor ALUCILEX Totalmente Blindado en puerto ${PORT}`));ss
