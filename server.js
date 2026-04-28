@@ -181,11 +181,12 @@ async function buscarDoctrina(embedding, limite = 15) {
     try {
         const { data, error } = await supabase.rpc('buscar_fragmentos', {
             query_embedding: embedding,
-            filtro_tipo: 'doctrina',
-            match_threshold: 0.12,
+            filtro_tipo: 'apuntes',
+            match_threshold: 0.00, // LIMITE EN CERO: Siempre traerá los 15 más cercanos
             match_count: limite
         });
-        if (!error && data) return data;
+        if (error) throw error;
+        return data || [];
     } catch (e) {
         console.error("[❌ ERROR SUPABASE DOCTRINA]:", e.message);
     }
@@ -296,18 +297,17 @@ app.post('/api/consultar', async (req, res) => {
         "Esta es una CÁTEDRA MAGISTRAL UNIVERSITARIA. Tu respuesta DEBE ser un tratado monumental. " +
         "Tienes 5000 tokens disponibles y debes usarlos casi en su totalidad.\n\n" +
         "REGLAS DE EXTENSIÓN Y FORMATO (INQUEBRANTABLES):\n" +
-        "1. **PROHIBICIÓN DE RESUMEN:** Está absolutamente PROHIBIDO dar respuestas de 1 o 2 párrafos por sección. Para CADA sección que abras, DEBES redactar un mínimo de 4 a 5 párrafos densos, con abundante doctrina, debate jurídico y ejemplos. Si eres escueto, fallarás.\n" +
+        "1. **PROHIBICIÓN DE RESUMEN:** Está absolutamente PROHIBIDO dar respuestas de 1 o 2 párrafos por sección. Para CADA sección que abras, DEBES redactar un mínimo de 4 a 5 párrafos densos. Si eres escueto, fallarás.\n" +
         "2. **CITA INICIAL LIMPIA:** Empieza transcribiendo el artículo exacto así: '📜 **Art. [Número] del Código Civil:** [Texto completo]'.\n" +
-        "3. **USO OBLIGATORIO DE LA DOCTRINA:** Debes leer el 'Contexto de Base de Datos' provisto. SI HAY APUNTES AHÍ, utilízalos para armar tu clase. Si el contexto está 'Vacío', asume el control total y extrae todo de tu propio conocimiento del Derecho Chileno.\n" +
-        "4. **CITA A LOS MAESTROS:** Tu respuesta no tiene validez si no nombras, explicas y debates los criterios de al menos tres de estos autores chilenos: Arturo Alessandri, Manuel Somarriva, René Ramos Pazos, Víctor Vial del Río, Pablo Rodríguez Grez o Luis Claro Solar.\n" +
-        "5. **ESTRUCTURA OBLIGATORIA (Mínimo 500 palabras por punto):**\n" +
+        "3. **USO OBLIGATORIO DE APUNTES :** Debes leer el 'Contexto de Base de Datos' provisto. SI  LA RESPUESTA NO ES  LO SUFICIENTEMENTE  OLGADA  UTILOZA   CONOCIMIENTO  DE DERECHO CHILENO  DE AUTORES  CONOCIDOS , utilízalos exhaustivamente para armar tu clase, mencionando a los autores que allí aparezcan.\n" +
+        "4. **SUERO DE LA VERDAD (ANTICULPA):** Si el contexto de apuntes está 'Vacío' o no contiene información sobre los autores, TIENES PROHIBIDO inventar citas bibliográficas, libros o fallos ficticios. Responde basándote en la dogmática general del Código Civil, pero NO alucines bibliografía que no posees en tu contexto.\n" +
+        "5. **ESTRUCTURA OBLIGATORIA:**\n" +
         "   - I. Naturaleza Jurídica y Evolución Histórica\n" +
-        "   - II. Concepto Doctrinal Profundo\n" +
-        "   - III. Análisis Exhaustivo de Elementos y Requisitos (Desarrolla cada requisito en un párrafo separado)\n" +
+        "   - II. Concepto  Profundo\n" +
+        "   - III. Análisis Exhaustivo de Elementos y Requisitos\n" +
         "   - IV. Efectos Jurídicos y Características Principales\n" +
-        "   - V. Casos Prácticos Complejos y Jurisprudencia\n" +
-        "6. **NO uses listas con viñetas simples.** Todo debe ser prosa académica fluida y profesional.";
-
+        "   - V. Casos Prácticos Genéricos\n" +
+        "6. **NO uses listas con viñetas simples.** Todo debe ser prosa académica fluida.";
     let mensajes = [{ role: "system", content: systemPrompt }];
     for (let msg of historial) mensajes.push(msg);
     mensajes.push({
