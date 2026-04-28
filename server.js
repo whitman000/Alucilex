@@ -161,16 +161,29 @@ function limpiarCaches() {
 }
 setInterval(limpiarCaches, 600000);
 
-// ========== BÚSQUEDA ROBUSTA DE ARTÍCULO Y DOCTRINA ==========
+// ========== BÚSQUEDA ROBUSTA DE ARTÍCULO Y DOCTRINA (ADAPTADO A METADATOS) ==========
 async function buscarArticuloPorNumero(numero) {
     try {
+        // Nueva Idea: Buscamos primero coincidencia exacta en numero_limpio (más rápido y preciso)
         const { data, error } = await supabase
+            .from('fragmentos_legales')
+            .select('contenido, metadatos, id')
+            .eq('metadatos->>tipo', 'ley')
+            .eq('metadatos->>numero_limpio', numero.toString())
+            .limit(1);
+
+        if (!error && data && data.length > 0) return data[0];
+
+        // Backup: Si no encontró por numero_limpio, probamos el filtro original
+        const { data: dataRetry } = await supabase
             .from('fragmentos_legales')
             .select('contenido, metadatos, id')
             .eq('metadatos->>tipo', 'ley')
             .filter('metadatos->>articulo', 'ilike', `%${numero}%`)
             .limit(1);
-        if (!error && data && data.length > 0) return data[0];
+        
+        return dataRetry?.[0] || null;
+
     } catch (e) {
         console.error("[❌ ERROR SUPABASE LEY]:", e.message);
     }
@@ -181,8 +194,8 @@ async function buscarDoctrina(embedding, limite = 15) {
     try {
         const { data, error } = await supabase.rpc('buscar_fragmentos', {
             query_embedding: embedding,
-            filtro_tipo: 'apuntes',
-            match_threshold: 0.00, // LIMITE EN CERO: Siempre traerá los 15 más cercanos
+            filtro_tipo: 'doctrina', // Etiqueta correcta según inyector
+            match_threshold: 0.00,   // Traer siempre los mejores 15
             match_count: limite
         });
         if (error) throw error;
@@ -202,7 +215,6 @@ app.post('/api/consultar', async (req, res) => {
     console.log(`[🗣️ USUARIO] Pregunta: "${pregunta}"`);
 
     if (!pregunta) {
-        console.log(`[⚠️ ADVERTENCIA] Pregunta vacía recibida.`);
         return res.status(400).json({ error: "Pregunta vacía" });
     }
 
@@ -216,7 +228,7 @@ app.post('/api/consultar', async (req, res) => {
     });
 
     if (respuestaCacheada && Date.now() - respuestaCacheada.timestamp < TTL_RESPUESTA) {
-        console.log(`[⚡ CACHÉ] Respondiendo desde la memoria rápida.`);
+        console.log(`[⚡ CACHÉ] Respondiendo desde memoria.`);
         const words = respuestaCacheada.respuesta.split(' ');
         for (let i = 0; i < words.length; i++) {
             res.write(`data: ${JSON.stringify({ content: words[i] + ' ' })}\n\n`);
@@ -224,19 +236,15 @@ app.post('/api/consultar', async (req, res) => {
         }
         res.write('data: [DONE]\n\n');
         res.end();
-        console.log(`=========================================\n`);
         return;
     }
 
     if (!conversaciones.has(sessionId)) conversaciones.set(sessionId, []);
     let historial = conversaciones.get(sessionId);
-    if (historial.length > MAX_HISTORIAL) historial = historial.slice(-MAX_HISTORIAL);
 
-    // 1. Detectar número de artículo
+    // 1. Detección de Artículo
     let numeroArticuloDetectado = null;
-    let articuloObjeto = null;
     let articuloContenido = "";
-    
     const matchNumero = pregunta.match(/(?:art(?:[íi]culo|\.?)?\s*)?(\d{1,4})(?!\d)/i);
     if (matchNumero && matchNumero[1]) {
         numeroArticuloDetectado = matchNumero[1];
@@ -245,29 +253,15 @@ app.post('/api/consultar', async (req, res) => {
         if (fromDic) numeroArticuloDetectado = fromDic.toString();
     }
 
-    if (numeroArticuloDetectado) {
-        console.log(`[🎯 DICCIONARIO] Artículo detectado para buscar: ${numeroArticuloDetectado}`);
-    } else {
-        console.log(`[🔍 DICCIONARIO] No se detectó artículo específico en la pregunta.`);
-    }
-
-    // 2. Ejecutar búsquedas en paralelo
-    let embeddingPromise = null;
-    if (cacheEmbeddings.has(hashPregunta)) {
-        embeddingPromise = Promise.resolve(cacheEmbeddings.get(hashPregunta));
-    } else {
-        embeddingPromise = openai.embeddings.create({
-            model: 'openai/text-embedding-3-small',
-            input: pregunta.substring(0, 8000),
-            dimensions: 768
-        }).then(res => {
-            console.log(`[🧠 EMBEDDING] Vector semántico generado correctamente.`);
-            return res.data[0].embedding;
-        }).catch(err => {
-            console.error(`[❌ ERROR EMBEDDING] ${err.message}`);
-            return null;
-        });
-    }
+    // 2. Procesamiento Paralelo
+    let embeddingPromise = openai.embeddings.create({
+        model: 'openai/text-embedding-3-small',
+        input: pregunta.substring(0, 8000),
+        dimensions: 768
+    }).then(r => {
+        console.log(`[🧠 EMBEDDING] Vector generado correctamente.`);
+        return r.data[0].embedding;
+    }).catch(e => { console.error("[❌ ERROR EMBEDDING]", e.message); return null; });
 
     let articuloPromise = numeroArticuloDetectado ? buscarArticuloPorNumero(numeroArticuloDetectado) : Promise.resolve(null);
 
@@ -275,50 +269,47 @@ app.post('/api/consultar', async (req, res) => {
     
     if (articuloResult) {
         articuloContenido = articuloResult.contenido.replace(/\[.*?\]/g, '').trim();
-        console.log(`[📜 LEY] ¡Éxito! Artículo ${numeroArticuloDetectado} extraído de Supabase.`);
-    } else if (numeroArticuloDetectado) {
-        console.log(`[⚠️ LEY] El Artículo ${numeroArticuloDetectado} no se encontró en la base de datos local.`);
+        console.log(`[📜 LEY] ¡Éxito! Artículo ${numeroArticuloDetectado} recuperado.`);
     }
 
     let doctrinaTextos = [];
     if (embeddingResult) {
-        cacheEmbeddings.set(hashPregunta, embeddingResult);
         const resultadosDoctrina = await buscarDoctrina(embeddingResult, 15);
-        doctrinaTextos = resultadosDoctrina.map(f => f.contenido || f.texto || '');
-        console.log(`[📚 DOCTRINA] El Sabueso recuperó ${resultadosDoctrina.length} fragmentos de apuntes.`);
+        doctrinaTextos = resultadosDoctrina.map(f => f.contenido || '');
+        console.log(`[📚 DOCTRINA] Se recuperaron ${resultadosDoctrina.length} fragmentos de apuntes.`);
     }
 
     let contextoDoctrina = doctrinaTextos.length ? doctrinaTextos.join('\n\n---\n\n') : '';
     let contextoTotal = `### APUNTES DEL ESTUDIANTE ENCONTRADOS EN BASE DE DATOS:\n${contextoDoctrina}\n\n### TEXTO DEL CÓDIGO CIVIL RECUPERADO:\n${articuloContenido || "Vacío"}`;
 
-    // 3. EL PROMPT EXTREMO CATEDRÁTICO
+    // 3. PROMPT MAGISTRAL (NUEVA VERSIÓN)
     const systemPrompt = 
-        "Eres Alucilex, el Catedrático Titular de Derecho Civil más erudito, exigente y exhaustivo de Chile. " +
-        "Esta es una CÁTEDRA MAGISTRAL UNIVERSITARIA. Tu respuesta DEBE ser un tratado monumental. " +
-        "Tienes 5000 tokens disponibles y debes usarlos casi en su totalidad.\n\n" +
-        "REGLAS DE EXTENSIÓN Y FORMATO (INQUEBRANTABLES):\n" +
-        "1. **PROHIBICIÓN DE RESUMEN:** Está absolutamente PROHIBIDO dar respuestas de 1 o 2 párrafos por sección. Para CADA sección que abras, DEBES redactar un mínimo de 4 a 5 párrafos densos. Si eres escueto, fallarás.\n" +
-        "2. **CITA INICIAL LIMPIA:** Empieza transcribiendo el artículo exacto así: '📜 **Art. [Número] del Código Civil:** [Texto completo]'.\n" +
-        "3. **USO OBLIGATORIO DE APUNTES :** Debes leer el 'Contexto de Base de Datos' provisto. SI  LA RESPUESTA NO ES  LO SUFICIENTEMENTE  OLGADA  UTILOZA   CONOCIMIENTO  DE DERECHO CHILENO  DE AUTORES  CONOCIDOS , utilízalos exhaustivamente para armar tu clase, mencionando a los autores que allí aparezcan.\n" +
-        "4. **SUERO DE LA VERDAD (ANTICULPA):** Si el contexto de apuntes está 'Vacío' o no contiene información sobre los autores, TIENES PROHIBIDO inventar citas bibliográficas, libros o fallos ficticios. Responde basándote en la dogmática general del Código Civil, pero NO alucines bibliografía que no posees en tu contexto.\n" +
+        "Eres Alucilex, el Catedrático Titular de Derecho Civil más prestigioso de Chile. " +
+        "Esta es una CÁTEDRA MAGISTRAL UNIVERSITARIA. Tu respuesta DEBE ser un tratado profundo.\n\n" +
+        "REGLAS INQUEBRANTABLES:\n" +
+        "1. **PROHIBICIÓN DE RESUMEN:** CADA sección debe tener un desarrollo denso (Mínimo 3-4 párrafos por punto).\n" +
+        "2. **CITA INICIAL:** Empieza con: '📜 **Art. [Número] del Código Civil:** [Texto completo]'.\n" +
+        "3. **USO DE APUNTES:** El 'Contexto' contiene tus propios APUNTES UNIVERSITARIOS. Úsalos como base. Si la información en ellos es insuficiente, utiliza tu vasto conocimiento oficial del Derecho Chileno para completar la clase.\n" +
+        "4. **SUERO DE LA VERDAD:** Puedes citar autores clásicos (Somarriva, Alessandri, Ramos Pazos) SOLO SI aparecen en los apuntes o si tienes absoluta certeza histórica. TIENES PROHIBIDO inventar nombres de libros o sentencias ficticias.\n" +
         "5. **ESTRUCTURA OBLIGATORIA:**\n" +
-        "   - I. Naturaleza Jurídica y Evolución Histórica\n" +
-        "   - II. Concepto  Profundo\n" +
-        "   - III. Análisis Exhaustivo de Elementos y Requisitos\n" +
-        "   - IV. Efectos Jurídicos y Características Principales\n" +
-        "   - V. Casos Prácticos Genéricos\n" +
-        "6. **NO uses listas con viñetas simples.** Todo debe ser prosa académica fluida.";
+        "   - I. Naturaleza Jurídica y Evolución\n" +
+        "   - II. Concepto Institucional Profundo\n" +
+        "   - III. Análisis de Elementos y Requisitos\n" +
+        "   - IV. Efectos Jurídicos Principales\n" +
+        "   - V. Casos Prácticos de Aplicación\n" +
+        "6. **PROSA ACADÉMICA:** Evita las viñetas simples; prefiere una narrativa jurídica fluida.";
+
     let mensajes = [{ role: "system", content: systemPrompt }];
     for (let msg of historial) mensajes.push(msg);
     mensajes.push({
         role: "user",
-        content: `${contextoTotal}\n\nPregunta del alumno: ${pregunta}\n\nDicta tu cátedra magistral ahora, asegurándote de desarrollar cada punto con máxima extensión y profundidad.`
+        content: `${contextoTotal}\n\nPregunta del alumno: ${pregunta}\n\nDicta tu cátedra magistral ahora.`
     });
 
     let respuestaFinal = "";
 
     try {
-        console.log(`[🤖 IA] Iniciando generación de cátedra magistral...`);
+        console.log(`[🤖 IA] Generando respuesta...`);
         const stream = await openai.chat.completions.create({
             model: "deepseek/deepseek-chat",
             messages: mensajes,
@@ -332,17 +323,17 @@ app.post('/api/consultar', async (req, res) => {
             respuestaFinal += content;
             res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
-        console.log(`[✅ RESPUESTA] Cátedra generada y enviada al alumno exitosamente (${respuestaFinal.length} caracteres).`);
+        console.log(`[✅ ÉXITO] Respuesta enviada (${respuestaFinal.length} caracteres).`);
     } catch (err) {
-        console.error(`[❌ ERROR IA] Falló la generación de OpenAI/DeepSeek: ${err.message}`);
-        res.write(`data: ${JSON.stringify({ content: "\n\n❌ Hubo una interrupción en la conexión. Por favor, reintenta." })}\n\n`);
+        console.error(`[❌ ERROR IA] ${err.message}`);
+        res.write(`data: ${JSON.stringify({ content: "\n\n❌ Error de conexión con el cerebro de Alucilex." })}\n\n`);
     }
 
     res.write('data: [DONE]\n\n');
     res.end();
     console.log(`=========================================\n`);
 
-    if(respuestaFinal.length > 50){
+    if(respuestaFinal.length > 100){
         cacheRespuestas.set(hashPregunta, { respuesta: respuestaFinal, timestamp: Date.now() });
         historial.push({ role: "user", content: pregunta });
         historial.push({ role: "assistant", content: respuestaFinal });
@@ -350,47 +341,7 @@ app.post('/api/consultar', async (req, res) => {
     }
 });
 
-// ======================== QUIZ Y MAPEO ORIGINAL COMPLETO ========================
-const mapeoTemas = {
-    "bienes": [
-        { campo: "articulo_numero", operador: "gte", valor: 565 },
-        { campo: "articulo_numero", operador: "lte", valor: 595 }
-    ],
-    "dominio": [
-        { campo: "articulo_numero", operador: "gte", valor: 582 },
-        { campo: "articulo_numero", operador: "lte", valor: 605 }
-    ],
-    "tradicion": [
-        { campo: "articulo_numero", operador: "gte", valor: 670 },
-        { campo: "articulo_numero", operador: "lte", valor: 699 }
-    ],
-    "posesion": [
-        { campo: "articulo_numero", operador: "gte", valor: 700 },
-        { campo: "articulo_numero", operador: "lte", valor: 729 }
-    ],
-    "filiacion": [
-        { campo: "articulo_numero", operador: "gte", valor: 179 },
-        { campo: "articulo_numero", operador: "lte", valor: 242 }
-    ],
-    "sucesion": [
-        { campo: "articulo_numero", operador: "gte", valor: 951 },
-        { campo: "articulo_numero", operador: "lte", valor: 1067 }
-    ],
-    "obligaciones": [
-        { campo: "articulo_numero", operador: "gte", valor: 1437 },
-        { campo: "articulo_numero", operador: "lte", valor: 1566 }
-    ],
-    "contratos": [
-        { campo: "articulo_numero", operador: "gte", valor: 1438 },
-        { campo: "articulo_numero", operador: "lte", valor: 2456 }
-    ],
-    "sociedad_conyugal": [
-        { campo: "articulo_numero", operador: "gte", valor: 135 },
-        { campo: "articulo_numero", operador: "lte", valor: 185 }
-    ]
-};
-
-// BANCO DE PREGUNTAS ORIGINAL
+// ========== QUIZ ADAPTADO ==========
 const bancoPreguntasAlucilex = [
     {
         pregunta: "Juan le dona a Pedro un automóvil con la condición de que este último 'no se case nunca'. Según el Código Civil chileno, ¿cuál es el efecto de esta condición?",
@@ -581,20 +532,25 @@ app.post('/api/quiz/generar', async (req, res) => {
         const indexAleatorio = Math.floor(Math.random() * totalPreguntas);
         const preguntaData = bancoPreguntasAlucilex[indexAleatorio];
         
-        let artData = { numero: "Dogmática General", texto: "Analizando fundamentos esenciales del Código Civil Chileno para el caso práctico." };
+        let artData = { numero: "Dogmática General", texto: "Analizando fundamentos esenciales del Código Civil Chileno." };
         
         try {
+            // Seleccionar un artículo aleatorio del Código Civil usando numero_limpio
             const artAleatorio = Math.floor(Math.random() * 2524) + 1;
             const { data } = await supabase.from('fragmentos_legales')
-                .select('contenido')
+                .select('contenido, metadatos')
                 .eq('metadatos->>tipo', 'ley')
-                .eq('metadatos->>articulo', String(artAleatorio))
+                .eq('metadatos->>numero_limpio', String(artAleatorio))
                 .limit(1);
+
             if (data && data.length > 0) {
-                artData = { numero: artAleatorio, texto: data[0].contenido.replace(/\[.*?\]/g, '').trim() };
+                artData = { 
+                    numero: artAleatorio, 
+                    texto: data[0].contenido.replace(/\[.*?\]/g, '').trim() 
+                };
             }
         } catch (e) {
-            // Silenciado para no llenar los logs en consultas secundarias
+            // Silenciado
         }
 
         res.json({
@@ -614,7 +570,7 @@ app.post('/api/quiz/generar', async (req, res) => {
 });
 
 app.get('/ping', (req, res) => res.status(200).send('OK'));
-app.get('/', (req, res) => res.send('API de Alucilex funcionando (Con Telemetría Visual).'));
+app.get('/', (req, res) => res.send('API Alucilex (Cátedra Profesional) funcionando.'));
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado en puerto ${PORT}`));
