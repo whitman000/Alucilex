@@ -177,12 +177,12 @@ async function buscarArticuloPorNumero(numero) {
     return null;
 }
 
-async function buscarDoctrina(embedding, limite = 8) {
+async function buscarDoctrina(embedding, limite = 15) { // AUMENTADO A 15 FRAGMENTOS
     try {
         const { data, error } = await supabase.rpc('buscar_fragmentos', {
             query_embedding: embedding,
             filtro_tipo: 'doctrina',
-            match_threshold: 0.25,
+            match_threshold: 0.12, // DRÁSTICAMENTE REDUCIDO PARA FORZAR QUE SIEMPRE ENCUENTRE APUNTES
             match_count: limite
         });
         if (!error && data) return data;
@@ -259,40 +259,46 @@ app.post('/api/consultar', async (req, res) => {
     let doctrinaTextos = [];
     if (embeddingResult) {
         cacheEmbeddings.set(hashPregunta, embeddingResult);
-        const resultadosDoctrina = await buscarDoctrina(embeddingResult, 8);
+        const resultadosDoctrina = await buscarDoctrina(embeddingResult, 15);
         doctrinaTextos = resultadosDoctrina.map(f => f.contenido || f.texto || '');
     }
 
     let contextoDoctrina = doctrinaTextos.length ? doctrinaTextos.join('\n\n---\n\n') : '';
-    let contextoTotal = `### ARTÍCULO RECUPERADO:\n${articuloContenido || "Vacío"}\n\n### DOCTRINA RECUPERADA:\n${contextoDoctrina}`;
+    let contextoTotal = `### APUNTES DEL ESTUDIANTE ENCONTRADOS EN BASE DE DATOS:\n${contextoDoctrina}\n\n### TEXTO DEL CÓDIGO CIVIL RECUPERADO:\n${articuloContenido || "Vacío"}`;
 
-    // 3. EL NUEVO PROMPT OBLIGATORIO: MODO CATEDRÁTICO MAGISTRAL
+    // 3. EL NUEVO PROMPT EXTREMO: FUERZA BRUTA PARA EXTENSIÓN Y PRECISIÓN
     const systemPrompt = 
-        "Eres Alucilex, un ilustre y exigente catedrático de Derecho Civil de una prestigiosa universidad chilena. " +
-        "Tu misión es dictar una CÁTEDRA MAGISTRAL Y EXHAUSTIVA. Tienes 5000 tokens disponibles, ¡ÚSALOS PARA EXPLAYARTE!\n\n" +
-        "REGLAS ESTRICTAS E INQUEBRANTABLES:\n" +
-        "1. **PROHIBIDO SER ESCUETO:** Tus respuestas DEBEN ser largas, profundas y analíticas (mínimo 5 a 6 párrafos bien desarrollados). NUNCA des respuestas breves.\n" +
-        "2. **CITA LIMPIA:** Empieza tu respuesta transcribiendo directamente el artículo aplicable del Código Civil, formato: '📜 **Art. [Número] del Código Civil:** [Texto]'.\n" +
-        "3. **BASAMENTO DOCTRINAL OBLIGATORIO:** Tienes la obligación de fundar tus conocimientos y citar a los grandes profesores del Derecho Chileno. Dependiendo de la materia, DEBES mencionar e integrar los criterios de: Arturo Alessandri, Manuel Somarriva, René Ramos Pazos, Víctor Vial del Río, Pablo Rodríguez Grez, Agustín Squella o Luis Claro Solar.\n" +
-        "4. **ESTRUCTURA DE CLASE:** Debes estructurar tu respuesta desarrollando a cabalidad: Naturaleza jurídica, Concepto doctrinal, Elementos y Requisitos, Características principales, y Ejemplos prácticos o aplicación jurisprudencial.\n" +
-        "5. **AUTONOMÍA DE EXPERTO:** Si el contexto dice 'Vacío', ignóralo totalmente. Utiliza tu vasto conocimiento preentrenado del Código Civil chileno y su doctrina. No pidas disculpas ni digas que falta información, tú eres la autoridad.\n" +
-        "6. **PROHIBIDO:** No uses listas cortas ni viñetas simples. Redacta en prosa académica densa y conectada.";
+        "Eres Alucilex, el Catedrático Titular de Derecho Civil más erudito, exigente y exhaustivo de Chile. " +
+        "Esta es una CÁTEDRA MAGISTRAL UNIVERSITARIA. Tu respuesta DEBE ser un tratado monumental. " +
+        "Tienes 5000 tokens disponibles y debes usarlos casi en su totalidad.\n\n" +
+        "REGLAS DE EXTENSIÓN Y FORMATO (INQUEBRANTABLES):\n" +
+        "1. **PROHIBICIÓN DE RESUMEN:** Está absolutamente PROHIBIDO dar respuestas de 1 o 2 párrafos por sección. Para CADA sección que abras, DEBES redactar un mínimo de 4 a 5 párrafos densos, con abundante doctrina, debate jurídico y ejemplos. Si eres escueto, fallarás.\n" +
+        "2. **CITA INICIAL LIMPIA:** Empieza transcribiendo el artículo exacto así: '📜 **Art. [Número] del Código Civil:** [Texto completo]'.\n" +
+        "3. **USO OBLIGATORIO DE LA DOCTRINA:** Debes leer el 'Contexto de Base de Datos' provisto. SI HAY APUNTES AHÍ, utilízalos para armar tu clase. Si el contexto está 'Vacío', asume el control total y extrae todo de tu propio conocimiento del Derecho Chileno.\n" +
+        "4. **CITA A LOS MAESTROS:** Tu respuesta no tiene validez si no nombras, explicas y debates los criterios de al menos tres de estos autores chilenos: Arturo Alessandri, Manuel Somarriva, René Ramos Pazos, Víctor Vial del Río, Pablo Rodríguez Grez o Luis Claro Solar.\n" +
+        "5. **ESTRUCTURA OBLIGATORIA (Mínimo 500 palabras por punto):**\n" +
+        "   - I. Naturaleza Jurídica y Evolución Histórica\n" +
+        "   - II. Concepto Doctrinal Profundo\n" +
+        "   - III. Análisis Exhaustivo de Elementos y Requisitos (Desarrolla cada requisito en un párrafo separado)\n" +
+        "   - IV. Efectos Jurídicos y Características Principales\n" +
+        "   - V. Casos Prácticos Complejos y Jurisprudencia\n" +
+        "6. **NO uses listas con viñetas simples.** Todo debe ser prosa académica fluida y profesional.";
 
     let mensajes = [{ role: "system", content: systemPrompt }];
     for (let msg of historial) mensajes.push(msg);
     mensajes.push({
         role: "user",
-        content: `${contextoTotal}\n\nPregunta del alumno: ${pregunta}\n\nDicta tu cátedra completa ahora.`
+        content: `${contextoTotal}\n\nPregunta del alumno: ${pregunta}\n\nDicta tu cátedra magistral ahora, asegurándote de desarrollar cada punto con máxima extensión y profundidad.`
     });
 
     let respuestaFinal = "";
 
     try {
-        // Se sube la temperatura a 0.4 para darle mayor fluidez y expansividad al texto
+        // Temperatura a 0.6 para máxima capacidad de expansión sin perder lógica jurídica
         const stream = await openai.chat.completions.create({
             model: "deepseek/deepseek-chat",
             messages: mensajes,
-            temperature: 0.4, 
+            temperature: 0.6, 
             max_tokens: 5000,
             stream: true,
         });
@@ -310,7 +316,7 @@ app.post('/api/consultar', async (req, res) => {
     res.write('data: [DONE]\n\n');
     res.end();
 
-    if(respuestaFinal.length > 20){
+    if(respuestaFinal.length > 50){
         cacheRespuestas.set(hashPregunta, { respuesta: respuestaFinal, timestamp: Date.now() });
         historial.push({ role: "user", content: pregunta });
         historial.push({ role: "assistant", content: respuestaFinal });
@@ -581,7 +587,7 @@ app.post('/api/quiz/generar', async (req, res) => {
 });
 
 app.get('/ping', (req, res) => res.status(200).send('OK'));
-app.get('/', (req, res) => res.send('API de Alucilex funcionando (Modo Cátedra).'));
+app.get('/', (req, res) => res.send('API de Alucilex funcionando (Modo Cátedra Magistral Extensa).'));
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Servidor ALUCILEX Totalmente Blindado en puerto ${PORT}`));
