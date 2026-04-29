@@ -344,35 +344,68 @@ app.post('/api/consultar', async (req, res) => {
     }
 });
 
-// ========== QUIZ ADAPTADO ==========
+// ========== MÓDULO DE EVALUACIÓN MAGISTRAL (QUIZ + ANÁLISIS IA) ==========
+
+/**
+ * Endpoint: /api/quiz/generar
+ * Lógica: 
+ * 1. Selecciona pregunta aleatoria del banco de 125.
+ * 2. Selecciona artículo aleatorio de Supabase.
+ * 3. Genera una explicación de cátedra (mínimo 10 líneas) usando IA.
+ */
 app.post('/api/quiz/generar', async (req, res) => {
-    console.log(`\n[🎲 QUIZ] Solicitud de nueva pregunta generada.`);
+    console.log(`\n[🎲 QUIZ] Iniciando generación de evaluación y análisis de cátedra...`);
+    
     try {
+        // 1. Selección de pregunta del banco externo (Ya no hay duplicados internos)
         const totalPreguntas = bancoPreguntasAlucilex.length;
         const indexAleatorio = Math.floor(Math.random() * totalPreguntas);
         const preguntaData = bancoPreguntasAlucilex[indexAleatorio];
         
-        let artData = { numero: "Dogmática General", texto: "Analizando fundamentos esenciales del Código Civil Chileno." };
+        let artData = { 
+            numero: "Fundamento Doctrinario", 
+            texto: "Analizando principios generales del Derecho Civil Chileno.",
+            analisisIA: "Iniciando análisis magistral..."
+        };
         
+        // 2. Obtención de Artículo Aleatorio desde Supabase
         try {
-            // Seleccionar un artículo aleatorio del Código Civil usando numero_limpio
-            const artAleatorio = Math.floor(Math.random() * 2524) + 1;
-            const { data } = await supabase.from('fragmentos_legales')
-                .select('contenido, metadatos')
+            const artNumeroAleatorio = Math.floor(Math.random() * 2524) + 1;
+            const { data, error } = await supabase.from('fragmentos_legales')
+                .select('contenido')
                 .eq('metadatos->>tipo', 'ley')
-                .eq('metadatos->>numero_limpio', String(artAleatorio))
+                .eq('metadatos->>numero_limpio', String(artNumeroAleatorio))
                 .limit(1);
 
-            if (data && data.length > 0) {
+            if (!error && data && data.length > 0) {
+                const textoArticulo = data[0].contenido.replace(/\[.*?\]/g, '').trim();
+                
+                // 3. GENERACIÓN DE ANÁLISIS DE CÁTEDRA (Mínimo 10 líneas)
+                const promptAnalisis = `Actúa como un catedrático experto en Derecho Civil. 
+                Explica de forma pedagógica y profunda el siguiente artículo del Código Civil:
+                "${textoArticulo}"
+                Tu explicación debe tener al menos 10 líneas de texto, ser clara para un estudiante, 
+                enfocarse en la importancia práctica de la norma y su aplicación en la vida real. 
+                No saludes, ve directo a la explicación.`;
+
+                const completion = await openai.chat.completions.create({
+                    model: "deepseek/deepseek-chat",
+                    messages: [{ role: "user", content: promptAnalisis }],
+                    temperature: 0.5,
+                    max_tokens: 1000
+                });
+
                 artData = { 
-                    numero: artAleatorio, 
-                    texto: data[0].contenido.replace(/\[.*?\]/g, '').trim() 
+                    numero: `Art. ${artNumeroAleatorio}`, 
+                    texto: textoArticulo,
+                    analisisIA: completion.choices[0].message.content
                 };
             }
-        } catch (e) {
-            // Silenciado
+        } catch (errArt) {
+            console.error("[❌ ERROR ARTÍCULO/IA]:", errArt.message);
         }
 
+        // 4. Respuesta consolidada al Frontend
         res.json({
             articulo: artData,
             pregunta: preguntaData.pregunta,
@@ -380,14 +413,20 @@ app.post('/api/quiz/generar', async (req, res) => {
             correcta: preguntaData.correcta,
             explicacion: preguntaData.explicacion,
             total: totalPreguntas,
-            origen: 'banco_aleatorio_alucilex'
+            origen: 'banco_125_preguntas_alucilex'
         });
 
     } catch (error) {
-        console.error('[❌ ERROR QUIZ]:', error);
-        res.status(500).json({ error: 'Error interno al generar pregunta.' });
+        console.error('[❌ ERROR CRÍTICO QUIZ]:', error);
+        res.status(500).json({ error: 'Error interno al generar la evaluación.' });
     }
 });
+
+app.get('/ping', (req, res) => res.status(200).send('OK'));
+app.get('/', (req, res) => res.send('API Alucilex (Cátedra Profesional) funcionando.'));
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`));
 
 app.get('/ping', (req, res) => res.status(200).send('OK'));
 app.get('/', (req, res) => res.send('API Alucilex (Cátedra Profesional) funcionando.'));
