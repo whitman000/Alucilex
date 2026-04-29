@@ -427,9 +427,3 @@ app.get('/', (req, res) => res.send('API Alucilex (Cátedra Profesional) funcion
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`));
-
-app.get('/ping', (req, res) => res.status(200).send('OK'));
-app.get('/', (req, res) => res.send('API Alucilex (Cátedra Profesional) funcionando.'));
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado en puerto ${PORT}`));
