@@ -347,19 +347,44 @@ app.post('/api/consultar', async (req, res) => {
     }
 });
 
-// ========== MÓDULO DE EVALUACIÓN MAGISTRAL (ESTÁTICO Y SIN LATENCIA) ==========
+// ========== MÓDULO DE EVALUACIÓN MAGISTRAL CON MOTOR DE VINCULACIÓN INTELIGENTE ==========
 app.post('/api/quiz/generar', async (req, res) => {
-    console.log(`\n[🎲 QUIZ] Generando evaluación instantánea desde memoria estática...`);
+    console.log(`\n[🎲 QUIZ] Generando evaluación instantánea con vinculación semántica...`);
     
     try {
+        // 1. Elegimos la pregunta del desafío al azar
         const totalPreguntas = bancoPreguntasAlucilex.length;
         const indexPregunta = Math.floor(Math.random() * totalPreguntas);
         const preguntaData = bancoPreguntasAlucilex[indexPregunta];
         
-        const totalArticulos = bancoArticulosAlucilex.length;
-        const indexArticulo = Math.floor(Math.random() * totalArticulos);
-        const articuloData = bancoArticulosAlucilex[indexArticulo];
+        // 2. MOTOR DE VINCULACIÓN INTELIGENTE (Búsqueda por palabras clave)
+        // Extraemos palabras de más de 4 letras de la pregunta para evitar artículos ("el", "la", "de")
+        const palabrasClave = preguntaData.pregunta.toLowerCase().split(' ').filter(p => p.length > 4);
+        let articuloData = null;
 
+        // Escaneamos los 50 artículos buscando coincidencias de vocabulario
+        for (let art of bancoArticulosAlucilex) {
+            const textoArticulo = (art.titulo + " " + art.texto + " " + art.analisisIA).toLowerCase();
+            const coincidencias = palabrasClave.filter(palabra => textoArticulo.includes(palabra));
+
+            // Si el artículo comparte al menos 2 palabras clave con la pregunta, ¡es un Match!
+            if (coincidencias.length >= 2) {
+                articuloData = art;
+                console.log(`[🔗 MATCH] Pregunta vinculada con: ${art.numero}`);
+                break; // Detenemos la búsqueda
+            }
+        }
+
+        // 3. SISTEMA DE RESPALDO (Fallback)
+        // Si no hay coincidencias exactas, elegimos un artículo al azar para mantener la cátedra activa
+        if (!articuloData) {
+            const totalArticulos = bancoArticulosAlucilex.length;
+            const indexArticulo = Math.floor(Math.random() * totalArticulos);
+            articuloData = bancoArticulosAlucilex[indexArticulo];
+            console.log(`[🎲 RANDOM] No hubo match exacto. Mostrando artículo aleatorio: ${articuloData.numero}`);
+        }
+
+        // 4. Enviamos el paquete completo y vinculado al alumno
         res.json({
             articulo: {
                 numero: articuloData.numero,
@@ -372,7 +397,7 @@ app.post('/api/quiz/generar', async (req, res) => {
             correcta: preguntaData.correcta,
             explicacion: preguntaData.explicacion,
             total: totalPreguntas,
-            origen: 'banco_estatico_alucilex'
+            origen: 'banco_estatico_vinculado'
         });
 
     } catch (error) {
