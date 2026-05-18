@@ -7,7 +7,6 @@ const OpenAI = require('openai');
 
 // Importar el banco de preguntas externo
 // Importar los bancos estáticos
-
 const bancoPreguntasAlucilex = require('./banco_preguntas.js');
 const bancoArticulosAlucilex = require('./banco_articulos.js');
 
@@ -16,6 +15,11 @@ app.use(cors());
 app.use(express.json());
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+
+// !!! NUEVO: INYECCIÓN PARA COMPARTIR SUPABASE CON EL MÓDULO DE ESCRITURAS !!!
+app.set('supabase', supabase);
+// =========================================================================
+
 const openai = new OpenAI({ 
     apiKey: process.env.OPENROUTER_API_KEY, 
     baseURL: 'https://openrouter.ai/api/v1' 
@@ -92,7 +96,7 @@ const diccionarioOro = {
     "cesion de derecho de herencia": 1909, "arrendamiento": 1915,
     "arrendamiento de transporte": 2013, "sociedad": 2053, "mandato": 2116,
     "delegacion del mandato": 2135, "comodato": 2174, "prestamo de uso": 2174,
-    "accion de precario": 2195, "mutuo": 2196, "prestamo de consumo": 2196,
+    "action de precario": 2195, "mutuo": 2196, "prestamo de consumo": 2196,
     "deposito": 2211, "deposito propiamente dicho": 2215, "secuestro": 2249,
     "renta vitalicia": 2259, "juego y apuesta": 2264, "censo vitalicio": 2279,
     "cuasicontratos": 2284, "agencia oficiosa": 2286, "pago de lo no debido": 2295,
@@ -170,7 +174,6 @@ setInterval(limpiarCaches, 600000);
 // ========== BÚSQUEDA ROBUSTA DE ARTÍCULO Y DOCTRINA (ADAPTADO A METADATOS) ==========
 async function buscarArticuloPorNumero(numero) {
     try {
-        // Nueva Idea: Buscamos primero coincidencia exacta en numero_limpio (más rápido y preciso)
         const { data, error } = await supabase
             .from('fragmentos_legales')
             .select('contenido, metadatos, id')
@@ -180,7 +183,6 @@ async function buscarArticuloPorNumero(numero) {
 
         if (!error && data && data.length > 0) return data[0];
 
-        // Backup: Si no encontró por numero_limpio, probamos el filtro original
         const { data: dataRetry } = await supabase
             .from('fragmentos_legales')
             .select('contenido, metadatos, id')
@@ -200,8 +202,8 @@ async function buscarDoctrina(embedding, limite = 15) {
     try {
         const { data, error } = await supabase.rpc('buscar_fragmentos', {
             query_embedding: embedding,
-            filtro_tipo: 'doctrina', // Etiqueta correcta según inyector
-            match_threshold: 0.00,   // Traer siempre los mejores 15
+            filtro_tipo: 'doctrina', 
+            match_threshold: 0.00,  
             match_count: limite
         });
         if (error) throw error;
@@ -408,6 +410,11 @@ app.post('/api/quiz/generar', async (req, res) => {
 
 app.get('/ping', (req, res) => res.status(200).send('OK'));
 app.get('/', (req, res) => res.send('API Alucilex (Cátedra Profesional) funcionando.'));
+
+// !!! NUEVO: INTEGRACIÓN MODULAR DEL ENRUTADOR ALUCILEX DE ESCRITURAS !!!
+const escriturasRouter = require('./escrituras.js');
+app.use('/api', escriturasRouter);
+// =========================================================================
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`));
