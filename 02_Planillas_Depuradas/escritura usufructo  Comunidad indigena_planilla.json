@@ -1,0 +1,727 @@
+{
+  "meta_configuracion": {
+    "tipo_acto_juridico": "USUFRUCTO",
+    "subtipo": "CONSTITUCION_DERECHO_DE_USUFRUCTO",
+    "leyes_citadas_principales": [
+      "Art. 764 Código Civil (Derecho de Usufructo)",
+      "Art. 770 Código Civil (Usufructo perpetuo / vitalicio)",
+      "Art. 771 Código Civil (Usufructo con plazo mínimo)",
+      "Art. 819 Código Civil (Prohibición de ceder, prestar, arrendar o enajenar el usufructo)",
+      "Art. 12 N°4 Ley N°19.253 (Tierras Indígenas - exención tributaria)",
+      "Art. 13 inciso 1° Ley N°19.253 (Actos y contratos sobre tierras indígenas)",
+      "Arts. 14 y 15 Convenio N°169 OIT (1991, ratificado por Chile en 2008)",
+      "Art. 1° inciso 4° D.L. N°3.516 (División de Predios Rústicos - prohibición cambio de destino)",
+      "Arts. 55 y 56 Ley General de Urbanismo y Construcciones (destino predios rurales)",
+      "Art. 53 Reglamento del Conservador de Bienes Raíces (inscripciones)",
+      "Art. 408 Código Orgánico de Tribunales (firma a ruego - no aplicable en este caso)"
+    ],
+    "requiere_deslindes_cbr": true,
+    "es_tierra_indigena": true,
+    "ley_indigena_aplicable": "Ley N°19.253",
+    "acto_a_titulo": "GRATUITO",
+    "requiere_insercion_documentos": true
+  },
+  "variables_formulario": {
+    "notaria": {
+      "notario_nombre": "Carlos F. Alarcón Ramírez",
+      "notario_calidad": "Abogado, Notario Público Titular",
+      "agrupacion_comunas": "Temuco, Padre Las Casas, Vilcún, Melipeuco, Cunco y Freire",
+      "ciudad_notaria": "Temuco",
+      "direccion_oficina": "Andrés Bello N°911",
+      "repertorio_numero": "2260",
+      "repertorio_anio": "2012",
+      "bimestre": "IV",
+      "fecha_escritura_dia": "cinco",
+      "fecha_escritura_mes": "Julio",
+      "fecha_escritura_anio": "dos mil doce",
+      "fecha_escritura_numerica": "05/07/2012",
+      "abogado_redactor_minuta": "Andrés Quiroz Santander"
+    },
+    "comparecientes": {
+      "constituyente": {
+        "tipo_persona": "JURIDICA",
+        "naturaleza": "Comunidad Indígena",
+        "nombre": "COMUNIDAD INDÍGENA MATEO ÑIRRIPIL",
+        "rut": "75.324.700-9",
+        "registro_conadi": {
+          "numero_registro": "756",
+          "organismo": "Corporación Nacional de Desarrollo Indígena (CONADI)",
+          "registro": "Registro Nacional de Comunidades y Asociaciones"
+        },
+        "domicilio": "Sector Muco Bajo, comuna de Lautaro",
+        "domicilio_ocasional": "de paso en ciudad de Temuco",
+        "rol_en_acto": "Constituyente del Derecho de Usufructo",
+        "representantes_legales": [
+          {
+            "nombre": "VERÓNICA DEL CARMEN CANIUPÁN CAYUPÁN",
+            "rut": "12.194.376-K",
+            "nacionalidad": "chilena",
+            "estado_civil": "casada",
+            "profesion_oficio": "labores de casa",
+            "cargo_en_comunidad": "Presidenta",
+            "domicilio": "Sector Muco Bajo, comuna de Lautaro",
+            "domicilio_ocasional": "de paso en ciudad de Temuco"
+          },
+          {
+            "nombre": "ANTONIO FELIX MILLÁN HUENCHÚN",
+            "rut": "7.606.258-7",
+            "nacionalidad": "chileno",
+            "estado_civil": "casado",
+            "profesion_oficio": "agricultor",
+            "cargo_en_comunidad": "Vicepresidente",
+            "domicilio": "Sector Muco Bajo, comuna de Lautaro",
+            "domicilio_ocasional": "de paso en ciudad de Temuco"
+          }
+        ],
+        "personeria_juridica": {
+          "documento": "Certificado de Personalidad Jurídica",
+          "emisor": "Corporación Nacional de Desarrollo Indígena (CONADI)",
+          "fecha_emision": "02/04/2012",
+          "vigencia_directiva_hasta": "30/07/2012",
+          "numero_protocolo_notarial": "1064",
+          "agregado_al_final_protocolo": true
+        }
+      },
+      "usufructuaria": {
+        "tipo_persona": "NATURAL",
+        "nombre": "ELVIRA PATRICIA LIPIN MILLALEN",
+        "rut": "8.687.003-7",
+        "nacionalidad": "chilena",
+        "estado_civil": "soltera",
+        "profesion_oficio": "labores de casa",
+        "domicilio": "Sector Muco Bajo, comuna de Lautaro",
+        "domicilio_ocasional": "de paso en ciudad de Temuco",
+        "rol_en_acto": "Usuaria o Beneficiaria del Derecho de Usufructo"
+      }
+    },
+    "inmuebles_de_dominio_constituyente": {
+      "descripcion_general": "Inmuebles de propiedad de la Comunidad Indígena Mateo Ñirripil, todos ubicados en la comuna de Lautaro, inscritos en el Conservador de Bienes Raíces de Lautaro en el año 2012",
+      "predios": [
+        {
+          "id": "a",
+          "denominacion": "Predio Agrícola",
+          "superficie": "cincuenta hectáreas",
+          "superficie_ha": 50,
+          "comuna": "Lautaro",
+          "deslindes": {
+            "norte": "Reserva de cincuenta hectáreas",
+            "oriente": "Reducción del indígena Coche",
+            "sur": "Hijuela número cuarenta y dos, rematada por Exequiel Romero",
+            "poniente": "Indígena Carilao y Cayuqueo"
+          },
+          "inscripcion_cbr": {
+            "fojas": "108 vuelta",
+            "numero": "130",
+            "anio": "2012",
+            "registro": "Registro de Propiedad",
+            "cbr": "Conservador de Bienes Raíces de Lautaro"
+          },
+          "rol_avaluo_sii": "292-17"
+        },
+        {
+          "id": "b",
+          "denominacion": "Lote Número Dos",
+          "descripcion": "Lote en que se subdividió el inmueble de mayor extensión ubicado en el lugar Dollinco",
+          "superficie": "seis hectáreas",
+          "superficie_ha": 6,
+          "comuna": "Lautaro",
+          "lugar": "Dollinco",
+          "plano_archivado": {
+            "numero": "196 final",
+            "registro": "Registro de Propiedad de Lautaro",
+            "anio": "2007"
+          },
+          "deslindes": {
+            "norte": "Valentín Manríquez, Gloria Abello Contreras y camino vecinal, en trescientos metros, todos separados por cerco",
+            "este": "Pablo Goebel Rivas en doscientos metros, separado por cerco",
+            "sur": "Encarnación Diocares Rivas en trescientos metros, separado por cerco",
+            "oeste": "Lote número uno de esta subdivisión en doscientos ocho metros"
+          },
+          "inscripcion_cbr": {
+            "fojas": "110 vuelta",
+            "numero": "132",
+            "anio": "2012",
+            "registro": "Registro de Propiedad",
+            "cbr": "Conservador de Bienes Raíces de Lautaro"
+          },
+          "rol_avaluo_sii": "293-78"
+        },
+        {
+          "id": "c",
+          "denominacion": "Santa Elena Norte",
+          "superficie": "veintiuna coma cincuenta y tres hectáreas",
+          "superficie_ha": 21.53,
+          "comuna": "Lautaro",
+          "deslindes": {
+            "norte": "Hijuela del colono repatriado Celindo Yáñez, Fundo Miraflores y Sucesión Manríquez",
+            "sur": "Resto del mismo predio o lote Santa Elena Sur",
+            "oriente": "Hijuela del colono repatriado Adán Ramírez, hoy Tomasa Rivas",
+            "poniente": "Resto de sucesión Valentín Manríquez y estero Dollinco"
+          },
+          "inscripcion_cbr": {
+            "fojas": "114",
+            "numero": "135",
+            "anio": "2012",
+            "registro": "Registro de Propiedad",
+            "cbr": "Conservador de Bienes Raíces de Lautaro"
+          },
+          "rol_avaluo_sii": "293-63"
+        },
+        {
+          "id": "d",
+          "denominacion": "Lote Número Dos - Las Pitras",
+          "descripcion": "Lote de cuarenta y nueve hectáreas resultante de la división del predio Las Pitras",
+          "superficie": "cuarenta y nueve hectáreas",
+          "superficie_ha": 49,
+          "comuna": "Lautaro",
+          "lugar": "Dollinco",
+          "deslindes": {
+            "norte": "Con rol 294-18 y 294-17",
+            "sur": "Con rol 293-28",
+            "este": "Con rol 293-28",
+            "oeste": "Con Río Dollinco, rol 293-20, Lote número Uno parte A"
+          },
+          "inscripcion_cbr": {
+            "fojas": "107 vuelta",
+            "numero": "129",
+            "anio": "2012",
+            "registro": "Registro de Propiedad",
+            "cbr": "Conservador de Bienes Raíces de Lautaro"
+          },
+          "rol_avaluo_sii": "293-5"
+        },
+        {
+          "id": "e",
+          "denominacion": "Lote C - Los Pilos de Muco",
+          "descripcion": "Lote C en que se dividió el predio denominado Los Pilos de Muco",
+          "superficie": "veintiséis coma noventa y siete hectáreas más o menos",
+          "superficie_ha": 26.97,
+          "comuna": "Lautaro",
+          "plano_archivado": {
+            "numero": "46 al final",
+            "registro": "Registro de Propiedad de Lautaro",
+            "anio": "1994"
+          },
+          "deslindes": {
+            "norte": "Con Pablo Goebel Rivas",
+            "sur": "Con camino público Lautaro – Vilcún por Quilacura, que lo separa del lote B de esta subdivisión",
+            "oriente": "Con lote B de esta subdivisión en línea quebrada en tres parcialidades",
+            "poniente": "Familia Peña en línea quebrada con cinco parcialidades"
+          },
+          "inscripcion_cbr": {
+            "fojas": "106 vuelta",
+            "numero": "128",
+            "anio": "2012",
+            "registro": "Registro de Propiedad",
+            "cbr": "Conservador de Bienes Raíces de Lautaro"
+          },
+          "rol_avaluo_sii": "293-66",
+          "es_predio_sobre_el_que_recae_usufructo": true
+        },
+        {
+          "id": "f",
+          "denominacion": "Lote A - Los Pilos de Muco",
+          "descripcion": "Lote A en que se dividió el predio denominado Los Pilos de Muco",
+          "superficie": "ciento cuarenta y nueve coma veinticinco hectáreas más o menos",
+          "superficie_ha": 149.25,
+          "comuna": "Lautaro",
+          "plano_archivado": {
+            "numero": "46 al final",
+            "registro": "Registro de Propiedad de Lautaro",
+            "anio": "1994"
+          },
+          "deslindes": {
+            "norte": "Con Estero Dollinco y Sucesión Anselme en línea quebrada en dos parcialidades",
+            "sur": "Río Muco y Lote B de esta subdivisión",
+            "oriente": "Con Sucesión Cuevas en línea quebrada en dos parcialidades",
+            "poniente": "Con Pablo Goebel Rivas en línea quebrada en dos parcialidades y Sucesión Contreras en línea quebrada en dos parcialidades"
+          },
+          "inscripcion_cbr": {
+            "fojas": "105 vuelta",
+            "numero": "127",
+            "anio": "2012",
+            "registro": "Registro de Propiedad",
+            "cbr": "Conservador de Bienes Raíces de Lautaro"
+          },
+          "rol_avaluo_sii": "293-65"
+        },
+        {
+          "id": "g",
+          "denominacion": "Lote Los Pilos Dos",
+          "descripcion": "Lote en que se subdividió el Lote B, resultante de la división del resto del Fundo Los Pilos de Muco",
+          "superficie": "setenta y dos coma ochenta y seis hectáreas",
+          "superficie_ha": 72.86,
+          "comuna": "Lautaro",
+          "plano_archivado": {
+            "numero": "449 al final",
+            "registro": "Registro de Propiedad de Lautaro",
+            "anio": "2009"
+          },
+          "deslindes": {
+            "norte": "Camino público de Lautaro a Vilcún por Quilacura que lo separa del Lote Los Pilos Uno de esta subdivisión",
+            "sureste": "Río Muco",
+            "oeste": "Línea quebrada de dos parcialidades con sucesión Segundo Muñoz, y en línea quebrada de cinco trazos parciales con familia Peña, ambos separados por cerco"
+          },
+          "inscripcion_cbr": {
+            "fojas": "109 vuelta",
+            "numero": "131",
+            "anio": "2012",
+            "registro": "Registro de Propiedad",
+            "cbr": "Conservador de Bienes Raíces de Lautaro"
+          },
+          "rol_avaluo_sii": "293-80"
+        },
+        {
+          "id": "h",
+          "denominacion": "Santa Flora",
+          "superficie": "ciento sesenta y dos coma cincuenta hectáreas aproximadas",
+          "superficie_ha": 162.5,
+          "comuna": "Lautaro",
+          "deslindes": {
+            "norte": "El río Muco, Reducción Ñirripil en mil cuatrocientos noventa metros y Sucesión Epuleo Martínez en cuatrocientos cincuenta metros",
+            "sur": "Camino vecinal en la parte que lo separa de lo adjudicado a don Adrián Abian en quinientos quince metros, Estero Quintrilpe y en ciento cincuenta metros con Sucesión Santos Illanes",
+            "oriente": "Con Sucesión Santos Illanes y con Sucesión Epuleo Martínez en un mil seiscientos veinte metros y con Antonio Illanes en trescientos cuarenta metros",
+            "poniente": "En novecientos sesenta metros con otros terrenos de Tomasa Rivas y Arturo Solervicens y dos rectas: la primera de mil doscientos metros con rumbo de trescientos setenta y siete grados centesimales; y la segunda de setecientos cincuenta metros con rumbo de trescientos setenta grados y veinticinco minutos centesimales que lo separa de la parte adjudicada a don Adrián Abian"
+          },
+          "inscripcion_cbr": {
+            "fojas": "104 vuelta",
+            "numero": "126",
+            "anio": "2012",
+            "registro": "Registro de Propiedad",
+            "cbr": "Conservador de Bienes Raíces de Lautaro"
+          },
+          "rol_avaluo_sii": "312-7"
+        },
+        {
+          "id": "i",
+          "denominacion": "Resto Lote Número Uno - Las Pitras (Parte A y Parte B)",
+          "descripcion": "Resto que queda de un predio de cuarenta y dos hectáreas que forma parte del lote número uno de cuarenta y nueve hectáreas, resultante de la división del predio Las Pitras",
+          "superficie_total_lote_uno": "cuarenta y nueve hectáreas",
+          "comuna": "Lautaro",
+          "lugar": "Dollinco",
+          "deslindes_lote_uno_general": {
+            "norte": "Río Dollinco roles 293-25, 293-3, 293-20, lote número dos Pablo Goebel",
+            "sur": "Rol 293-4, sucesión F. Abello",
+            "este": "Rol 293-28, Lote número dos Pablo Goebel",
+            "oeste": "Río Dollinco, roles 293-20, 293-3 y 293-25"
+          },
+          "subdivisiones": [
+            {
+              "denominacion": "Lote número uno parte A",
+              "superficie": "cuarenta y dos hectáreas",
+              "superficie_ha": 42,
+              "deslindes": {
+                "norte": "Río Dollinco, roles 293-25, 293-3, 293, 293-25, lote número dos, Pablo Goebel",
+                "sur": "Rol 293-4, sucesión F. Abello, parte B lote número uno, Guillermo Brito",
+                "este": "Parte lote B número uno, Guillermo Brito, rol 293-28 y lote número dos Pablo Goebel",
+                "oeste": "Río Dollinco roles 293-20, 293-3 y 293-25"
+              }
+            },
+            {
+              "denominacion": "Lote número uno parte B",
+              "superficie": "siete hectáreas",
+              "superficie_ha": 7,
+              "deslindes": {
+                "norte": "Lote número uno parte A Guillermo Brito",
+                "sur": "Rol 293-4, sucesión F. Abello",
+                "este": "Rol 293-28",
+                "oeste": "Lote número uno parte A Guillermo Brito y rol 293-4, sucesión F. Abello"
+              }
+            }
+          ],
+          "inscripcion_cbr": {
+            "fojas": "112 vuelta",
+            "numero": "134",
+            "anio": "2012",
+            "registro": "Registro de Propiedad",
+            "cbr": "Conservador de Bienes Raíces de Lautaro"
+          },
+          "rol_avaluo_sii": "293-34"
+        },
+        {
+          "id": "j",
+          "denominacion": "San Leandro",
+          "superficie": "ochenta hectáreas",
+          "superficie_ha": 80,
+          "descripcion": "Bien raíz formado por varios lotes de terreno que se encuentran separados unos de otros",
+          "comuna": "Lautaro",
+          "lotes_componentes": [
+            {
+              "id": "A",
+              "denominacion": "Hijuela número nueve",
+              "superficie": "diecinueve hectáreas",
+              "superficie_ha": 19,
+              "deslindes": {
+                "norte": "Terrenos indígenas",
+                "oriente": "Río Muco",
+                "sur": "Hijuela número diez de cuarenta hectáreas",
+                "poniente": "Resto de la hijuela número nueve que se deslinda a continuación"
+              }
+            },
+            {
+              "id": "B",
+              "denominacion": "Resto de la hijuela número nueve",
+              "superficie": "veintiuna hectáreas",
+              "superficie_ha": 21,
+              "deslindes": {
+                "norte": "Terrenos indígenas",
+                "oriente": "Hijuela número nueve de diecinueve hectáreas del señor Gavilán, hoy de la vendedora doña Margarita Rosa Ximena Cuevas Gutiérrez",
+                "sur": "Hijuela número diez de cuarenta hectáreas de Pampillo Gavilán",
+                "poniente": "Hijuela de cincuenta hectáreas del vendedor, que forma parte de este predio San Leandro y de propiedad de Tomasa Rivas"
+              }
+            },
+            {
+              "id": "C",
+              "denominacion": "Hijuela número diez",
+              "superficie": "cuarenta hectáreas",
+              "superficie_ha": 40,
+              "deslindes": {
+                "norte": "Resto de las cuarenta hectáreas deslindadas antes, que forman las ochenta hectáreas de este lote",
+                "oriente": "Muco",
+                "sur": "Hijuela número cuarenta y cuatro de Lorenzo Rivas, hoy Tomasa Rivas de Goebel",
+                "poniente": "Hijuela número cuarenta y tres y cuarenta y dos del mismo señor Rivas, hoy Tomasa Rivas"
+              }
+            }
+          ],
+          "inscripcion_cbr": {
+            "fojas": "111 vuelta",
+            "numero": "113",
+            "anio": "2012",
+            "registro": "Registro de Propiedad",
+            "cbr": "Conservador de Bienes Raíces de Lautaro"
+          },
+          "roles_avaluo_sii": [
+            "292-14",
+            "292-15"
+          ]
+        }
+      ]
+    },
+    "usufructo": {
+      "tipo": "CONSTITUCION_DERECHO_REAL_USUFRUCTO",
+      "titulo": "A título gratuito",
+      "duracion": "Perpetuo, con plazo mínimo garantizado de veinticinco años contados desde la fecha de la escritura",
+      "plazo_minimo_anios": 25,
+      "fecha_inicio_plazo": "05/07/2012",
+      "clausula_sucesoria": "En el evento de que la usuaria o beneficiaria falleciere antes de cumplido el plazo señalado, ejercerán este derecho la sucesión hereditaria de la beneficiaria o usuaria hasta el cumplimiento del plazo de veinticinco años",
+      "normas_aplicables_duracion": [
+        "Art. 770 Código Civil",
+        "Art. 771 Código Civil"
+      ],
+      "prohibicion_cesion": {
+        "aplica": true,
+        "descripcion": "La usuaria o beneficiaria declara bajo juramento que conoce la prohibición legal de ceder, prestar, arrendar o enajenar a cualquier título el Derecho de Usufructo",
+        "norma": "Art. 819 Código Civil"
+      },
+      "acuerdo_asamblea": {
+        "fecha_acta": "29/04/2012",
+        "descripcion": "Acta de asamblea de la Comunidad Indígena que autoriza la constitución del usufructo, acompañada a la escritura pública"
+      },
+      "predio_sobre_el_que_recae": {
+        "denominacion_predio_matriz": "Lote C - Los Pilos de Muco",
+        "rol_avaluo_sii_predio_matriz": "293-66",
+        "descripcion_retazo": "Retazo de terreno de una superficie aproximada de nueve coma diez hectáreas, situado dentro del Lote C",
+        "superficie_retazo": "nueve coma diez hectáreas",
+        "superficie_retazo_ha": 9.1,
+        "denominacion_retazo": "Lote Treinta",
+        "deslindes_retazo": {
+          "norte": "En línea recta que lo separa en ciento noventa y nueve coma sesenta metros de Camino Interior",
+          "este": "Cerco en línea recta en doscientos cincuenta y uno coma cuarenta metros que lo separa de Pablo Walter Herdener Truan",
+          "sur": "En línea recta de trescientos veintidós coma veintinueve metros que lo separa de Leonardo Manuel Ortiz Lepin",
+          "oeste": "En línea recta que lo separa en cuatrocientos veinticinco coma noventa y tres metros de lote número treinta y uno de Rosa María Lipin Millalen"
+        },
+        "medidas_lineales": {
+          "norte_metros": 199.6,
+          "este_metros": 251.4,
+          "sur_metros": 322.29,
+          "oeste_metros": 425.93
+        },
+        "plano_y_minuta": {
+          "confeccionado_por": "Mario Inostroza Zapata, Técnico Topógrafo",
+          "numero_protocolo_notarial": "1065",
+          "agregado_al_final_protocolo": true
+        },
+        "advertencia_no_subdivision": "La presente escritura pública, minuta de deslindes y plano no constituyen subdivisión de los inmuebles, y sólo tiene por objeto constituir el derecho de usufructo respecto de una porción de éstos"
+      },
+      "prohibicion_cambio_destino": {
+        "aplica": true,
+        "norma": "Art. 1° inciso 4° D.L. N°3.516 sobre División de Predios Rústicos",
+        "referencia_adicional": "Arts. 55 y 56 Ley General de Urbanismo y Construcciones"
+      }
+    },
+    "condicion_tierra_indigena": {
+      "es_tierra_indigena": true,
+      "norma": "Art. 12 N°4 Ley N°19.253",
+      "exencion_impuesto_territorial": true,
+      "norma_exencion": "Inciso final del Art. 12 Ley N°19.253",
+      "autorizacion_acto_juridico": {
+        "norma_principal": "Art. 13 inciso 1° Ley N°19.253",
+        "normas_complementarias": [
+          "Art. 14 Convenio N°169 OIT (1991)",
+          "Art. 15 Convenio N°169 OIT (1991)"
+        ],
+        "ratificacion_chile": "Año 2008"
+      }
+    },
+    "documentos_insertos_protocolo": [
+      {
+        "numero_documento_sii": "6167721",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "292-17",
+        "direccion_propiedad": "Camino Brasil",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 41161972,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 33558855,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía"
+      },
+      {
+        "numero_documento_sii": "6167725",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "312-7",
+        "direccion_propiedad": "Santa Flora",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 107769567,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 100166450,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía",
+        "observacion": "Certificado duplicado en el documento (también aparece con N° 6167716)"
+      },
+      {
+        "numero_documento_sii": "6167724",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "293-65",
+        "direccion_propiedad": "Los Pilos de Muco LT A",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 169096060,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 161492943,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía"
+      },
+      {
+        "numero_documento_sii": "6167720",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "293-5",
+        "direccion_propiedad": "Las Pitras",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 64832247,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 57229130,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía"
+      },
+      {
+        "numero_documento_sii": "6167721",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "292-17",
+        "direccion_propiedad": "Camino Brasil",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 41161972,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 33558855,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía"
+      },
+      {
+        "numero_documento_sii": "6167727",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "293-80",
+        "direccion_propiedad": "Los Pilos dos",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 46663084,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 39059967,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía"
+      },
+      {
+        "numero_documento_sii": "6167716",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "312-7",
+        "direccion_propiedad": "Santa Flora",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 107769567,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 100166450,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía"
+      },
+      {
+        "numero_documento_sii": "6167726",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "293-78",
+        "direccion_propiedad": "Sta Elena lote dos",
+        "destino": "Agrícola",
+        "propietario": "Inmobiliaria Bretana Limitada",
+        "rut_propietario": "77.328.710-4",
+        "avaluo_total_pesos": 7614616,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 11499,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía",
+        "alerta": "PROPIETARIO REGISTRADO EN SII ES INMOBILIARIA BRETANA LIMITADA (RUT 77.328.710-4), NO LA COMUNIDAD INDÍGENA MATEO ÑIRRIPIL. Verificar concordancia con inscripción CBR N°132/2012."
+      },
+      {
+        "numero_documento_sii": "6167718",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "292-15",
+        "direccion_propiedad": "San Leandro",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 67161229,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 59558112,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía"
+      },
+      {
+        "numero_documento_sii": "6167717",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "292-14",
+        "direccion_propiedad": "San Leandro",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 14365700,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 6762583,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía"
+      },
+      {
+        "numero_documento_sii": "6167722",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "293-34",
+        "direccion_propiedad": "Las Pitras Pte.",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 62961261,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 55358144,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía"
+      },
+      {
+        "numero_documento_sii": "6167723",
+        "tipo": "CERTIFICADO DE AVALUO FISCAL",
+        "fecha_emision": "27/06/2012",
+        "semestre_validez": "Primer Semestre 2012",
+        "comuna": "Lautaro",
+        "rol": "293-63",
+        "direccion_propiedad": "Sta. Elena Pte.",
+        "destino": "Agrícola",
+        "propietario": "Comunidad Indígena Mateo Ñirripil",
+        "rut_propietario": "75.324.700-9",
+        "avaluo_total_pesos": 28486495,
+        "avaluo_exento_pesos": 7603117,
+        "avaluo_afecto_pesos": 20883378,
+        "nota_exencion_indigena": "Esta propiedad se encuentra en trámite de exención indígena con vigencia primer semestre del dos mil doce; a publicarse en el rol de reemplazo del mes de diciembre de dos mil doce",
+        "organismo_emisor": "Departamento Avaluaciones Servicio de Impuestos Internos Dirección Regional Araucanía"
+      },
+      {
+        "tipo": "CERTIFICADO_PERSONALIDAD_JURIDICA_CONADI",
+        "emisor": "Corporación Nacional de Desarrollo Indígena (CONADI)",
+        "fecha_emision": "02/04/2012",
+        "vigencia_directiva_hasta": "30/07/2012",
+        "numero_protocolo_notarial": "1064",
+        "agregado_al_final_protocolo": true
+      },
+      {
+        "tipo": "ACTA_ASAMBLEA_COMUNIDAD_INDIGENA",
+        "fecha_acta": "29/04/2012",
+        "descripcion": "Acta de asamblea de la Comunidad Indígena Mateo Ñirripil que acuerda constituir el derecho de usufructo en favor de Elvira Patricia Lipin Millalen",
+        "acompanada_a_escritura": true
+      },
+      {
+        "tipo": "PLANO_Y_MINUTA_DESLINDES",
+        "confeccionado_por": "Mario Inostroza Zapata, Técnico Topógrafo",
+        "descripcion": "Plano y minuta de deslindes del Lote Treinta de 9,10 hectáreas sobre el cual recae el usufructo",
+        "numero_protocolo_notarial": "1065",
+        "agregado_al_final_protocolo": true
+      }
+    ],
+    "alertas_juridicas": [
+      {
+        "codigo": "ALERTA_001",
+        "tipo": "DISCORDANCIA_PROPIETARIO_SII",
+        "descripcion": "El Certificado de Avalúo Fiscal N°6167726 correspondiente al Rol 293-78 (Lote N°2 - Santa Elena) registra como propietario a 'Inmobiliaria Bretana Limitada' RUT 77.328.710-4, en circunstancias que la escritura declara que dicho inmueble pertenece a la Comunidad Indígena Mateo Ñirripil. Se recomienda verificar la concordancia con la inscripción CBR N°132/2012 de Lautaro.",
+        "severidad": "ALTA"
+      },
+      {
+        "codigo": "ALERTA_002",
+        "tipo": "CERTIFICADO_DUPLICADO_SII",
+        "descripcion": "El predio Santa Flora (Rol 312-7) aparece con dos certificados de avalúo distintos: N°6167725 y N°6167716, ambos con idénticos valores. Se recomienda verificar cuál es el documento válido.",
+        "severidad": "MEDIA"
+      },
+      {
+        "codigo": "ALERTA_003",
+        "tipo": "USUFRUCTO_SOBRE_TIERRA_INDIGENA",
+        "descripcion": "El acto jurídico recae sobre tierras indígenas conforme al Art. 12 N°4 de la Ley 19.253. La constitución de usufructo está autorizada por el Art. 13 inciso 1° de la misma ley, en relación con los Arts. 14 y 15 del Convenio 169 OIT. La usuaria declara bajo juramento conocer la prohibición del Art. 819 CC de ceder, prestar, arrendar o enajenar el usufructo.",
+        "severidad": "INFORMATIVA"
+      },
+      {
+        "codigo": "ALERTA_004",
+        "tipo": "CERTIFICADO_AVALUO_SII_FALTANTE",
+        "descripcion": "No se inserta en el protocolo el Certificado de Avalúo Fiscal del Rol 293-66 (Lote C - Los Pilos de Muco), que es precisamente el predio sobre el cual recae el usufructo. El certificado N°6167721 corresponde al Rol 292-17 (Camino Brasil). Se recomienda verificar si existe un certificado específico para el Rol 293-66.",
+        "severidad": "ALTA"
+      }
+    ]
+  },
+  "texto_escritura_tipo": {
+    "encabezado": "{{notaria.notario_nombre}}\n{{notaria.notario_calidad}}. {{notaria.ciudad_notaria}}.\nRegistro de Instrumentos Públicos. Repertorio N° {{notaria.repertorio_numero}} - {{notaria.repertorio_anio}}\nBimestre {{notaria.bimestre}}\n\nCONSTITUCION DERECHO DE USUFRUCTO\n\n{{comparecientes.constituyente.nombre}}\n\nA\n\n{{comparecientes.usufructuaria.nombre}}",
+    "cuerpo": "EN LA CIUDAD DE {{notaria.ciudad_notaria}}, República de Chile, a {{notaria.fecha_escritura_dia}} de {{notaria.fecha_escritura_mes}} del año {{notaria.fecha_escritura_anio}}, ante mí, {{notaria.notario_nombre}}, Abogado, Notario Público Titular de la agrupación de las Comunas de {{notaria.agrupacion_comunas}}, con oficio en esta ciudad de {{notaria.ciudad_notaria}}, calle {{notaria.direccion_oficina}}, comparecen: La Comunidad Indígena \"{{comparecientes.constituyente.nombre}}\", rol único tributario número {{comparecientes.constituyente.rut}}, inscrita bajo el número {{comparecientes.constituyente.registro_conadi.numero_registro}} del Registro Nacional de Comunidades y Asociaciones de la Corporación Nacional de Desarrollo Indígena, representada legalmente por doña {{comparecientes.constituyente.representantes_legales[0].nombre}}, {{comparecientes.constituyente.representantes_legales[0].nacionalidad}}, {{comparecientes.constituyente.representantes_legales[0].estado_civil}}, {{comparecientes.constituyente.representantes_legales[0].profesion_oficio}}, cédula de identidad número {{comparecientes.constituyente.representantes_legales[0].rut}}, en su calidad de {{comparecientes.constituyente.representantes_legales[0].cargo_en_comunidad}} y don {{comparecientes.constituyente.representantes_legales[1].nombre}}, {{comparecientes.constituyente.representantes_legales[1].nacionalidad}}, {{comparecientes.constituyente.representantes_legales[1].estado_civil}}, {{comparecientes.constituyente.representantes_legales[1].profesion_oficio}}, cédula de identidad número {{comparecientes.constituyente.representantes_legales[1].rut}}, en su calidad de {{comparecientes.constituyente.representantes_legales[1].cargo_en_comunidad}}, todos con domicilio en el sector {{comparecientes.constituyente.domicilio}}, y de paso en ésta ciudad de {{notaria.ciudad_notaria}}, por una parte y como constituyente y por la otra parte como usuaria o beneficiaria doña {{comparecientes.usufructuaria.nombre}}, {{comparecientes.usufructuaria.nacionalidad}}, {{comparecientes.usufructuaria.estado_civil}}, {{comparecientes.usufructuaria.profesion_oficio}}, cédula de identidad número {{comparecientes.usufructuaria.rut}}, con domicilio en el sector {{comparecientes.usufructuaria.domicilio}} y de paso en ésta ciudad de {{notaria.ciudad_notaria}}, todos los comparecientes mayores de edad, quienes acreditaron su identidad con sus respectivas cédulas ya anotadas y exponen: PRIMERO: Declara la COMUNIDAD INDÍGENA {{comparecientes.constituyente.nombre}}, representada legalmente por su Presidenta y Vicepresidente doña {{comparecientes.constituyente.representantes_legales[0].nombre}} y don {{comparecientes.constituyente.representantes_legales[1].nombre}}, respectivamente, que es dueña exclusiva de los siguientes inmuebles: a) Predio Agrícola de {{inmuebles_de_dominio_constituyente.predios[0].superficie}} de superficie, ubicado en la comuna de {{inmuebles_de_dominio_constituyente.predios[0].comuna}}, cuyos deslindes particulares son los siguientes: NORTE, {{inmuebles_de_dominio_constituyente.predios[0].deslindes.norte}}; ORIENTE, {{inmuebles_de_dominio_constituyente.predios[0].deslindes.oriente}}; SUR: {{inmuebles_de_dominio_constituyente.predios[0].deslindes.sur}}; y PONIENTE, {{inmuebles_de_dominio_constituyente.predios[0].deslindes.poniente}}.- El dominio a su nombre rola inscrito a fojas {{inmuebles_de_dominio_constituyente.predios[0].inscripcion_cbr.fojas}}, número {{inmuebles_de_dominio_constituyente.predios[0].inscripcion_cbr.numero}}, del Registro de Propiedad del año {{inmuebles_de_dominio_constituyente.predios[0].inscripcion_cbr.anio}} del Conservador de Bienes Raíces de Lautaro. Para efectos tributarios, el inmueble se encuentra registrado ante el Servicio de Impuestos Internos bajo el Rol de Avalúo número {{inmuebles_de_dominio_constituyente.predios[0].rol_avaluo_sii}}.- b) LOTE NÚMERO DOS, en que se subdividió el inmueble de mayor extensión ubicado en el lugar Dollinco de la comuna de {{inmuebles_de_dominio_constituyente.predios[1].comuna}}, según plano y memoria explicativa que se encuentra archivado bajo el número {{inmuebles_de_dominio_constituyente.predios[1].plano_archivado.numero}} del Registro de Propiedad de Lautaro del año {{inmuebles_de_dominio_constituyente.predios[1].plano_archivado.anio}}, dicho lote tiene una superficie de {{inmuebles_de_dominio_constituyente.predios[1].superficie}}, cuyos deslindes particulares son los siguientes: NORTE, {{inmuebles_de_dominio_constituyente.predios[1].deslindes.norte}}; ESTE, {{inmuebles_de_dominio_constituyente.predios[1].deslindes.este}}; SUR, {{inmuebles_de_dominio_constituyente.predios[1].deslindes.sur}}; y OESTE, {{inmuebles_de_dominio_constituyente.predios[1].deslindes.oeste}}.- El dominio a su nombre rola inscrito a fojas {{inmuebles_de_dominio_constituyente.predios[1].inscripcion_cbr.fojas}}, número {{inmuebles_de_dominio_constituyente.predios[1].inscripcion_cbr.numero}} del Registro de Propiedad del año {{inmuebles_de_dominio_constituyente.predios[1].inscripcion_cbr.anio}} del Conservador de Bienes Raíces de Lautaro. Para efectos tributarios, el inmueble se encuentra registrado ante el Servicio de Impuestos Internos bajo el Rol de Avalúo número {{inmuebles_de_dominio_constituyente.predios[1].rol_avaluo_sii}}.- c) Predio denominado \"{{inmuebles_de_dominio_constituyente.predios[2].denominacion}}\", de una cabida de {{inmuebles_de_dominio_constituyente.predios[2].superficie}}, ubicado en la comuna de {{inmuebles_de_dominio_constituyente.predios[2].comuna}}, siendo los deslindes particulares los siguientes: NORTE, {{inmuebles_de_dominio_constituyente.predios[2].deslindes.norte}}; SUR, {{inmuebles_de_dominio_constituyente.predios[2].deslindes.sur}}; ORIENTE, {{inmuebles_de_dominio_constituyente.predios[2].deslindes.oriente}}; y PONIENTE, {{inmuebles_de_dominio_constituyente.predios[2].deslindes.poniente}}. El dominio a su nombre rola inscrito a fojas {{inmuebles_de_dominio_constituyente.predios[2].inscripcion_cbr.fojas}}, número {{inmuebles_de_dominio_constituyente.predios[2].inscripcion_cbr.numero}} del Registro de Propiedad del año {{inmuebles_de_dominio_constituyente.predios[2].inscripcion_cbr.anio}} del Conservador de Bienes Raíces de Lautaro. Para efectos tributarios, el inmueble se encuentra registrado ante el Servicio de Impuestos Internos bajo el Rol de Avalúo número {{inmuebles_de_dominio_constituyente.predios[2].rol_avaluo_sii}}.- d) LOTE NÚMERO DOS, de {{inmuebles_de_dominio_constituyente.predios[3].superficie}} resultante de la división del predio \"Las Pitras\", ubicado en Dollinco, comuna de {{inmuebles_de_dominio_constituyente.predios[3].comuna}}, siendo los deslindes particulares los siguientes: NORTE, con rol {{inmuebles_de_dominio_constituyente.predios[3].deslindes.norte}}; SUR, con rol {{inmuebles_de_dominio_constituyente.predios[3].deslindes.sur}}; ESTE, con rol {{inmuebles_de_dominio_constituyente.predios[3].deslindes.este}}; y OESTE, con {{inmuebles_de_dominio_constituyente.predios[3].deslindes.oeste}}. El dominio a su nombre rola inscrito a fojas {{inmuebles_de_dominio_constituyente.predios[3].inscripcion_cbr.fojas}}, número {{inmuebles_de_dominio_constituyente.predios[3].inscripcion_cbr.numero}} del Registro de Propiedad del año {{inmuebles_de_dominio_constituyente.predios[3].inscripcion_cbr.anio}} del Conservador de Bienes Raíces de Lautaro. Para efectos tributarios, el inmueble se encuentra registrado ante el Servicio de Impuestos Internos bajo el Rol de Avalúo número {{inmuebles_de_dominio_constituyente.predios[3].rol_avaluo_sii}}.- e) LOTE \"C\", con una superficie de {{inmuebles_de_dominio_constituyente.predios[4].superficie}}, en que se dividió el predio denominado \"Los Pilos de Muco\", ubicado en esta comuna de {{inmuebles_de_dominio_constituyente.predios[4].comuna}}, y según plano que corre archivado bajo el número {{inmuebles_de_dominio_constituyente.predios[4].plano_archivado.numero}} del Registro de Propiedad de Lautaro, año {{inmuebles_de_dominio_constituyente.predios[4].plano_archivado.anio}}, dicho Lote \"C\", tiene los siguientes deslindes: NORTE, con {{inmuebles_de_dominio_constituyente.predios[4].deslindes.norte}}; SUR, con {{inmuebles_de_dominio_constituyente.predios[4].deslindes.sur}}; ORIENTE, con {{inmuebles_de_dominio_constituyente.predios[4].deslindes.oriente}}; y PONIENTE, {{inmuebles_de_dominio_constituyente.predios[4].deslindes.poniente}}. El dominio a su nombre rola inscrito a fojas {{inmuebles_de_dominio_constituyente.predios[4].inscripcion_cbr.fojas}}, número {{inmuebles_de_dominio_constituyente.predios[4].inscripcion_cbr.numero}} del Registro de Propiedad del año {{inmuebles_de_dominio_constituyente.predios[4].inscripcion_cbr.anio}} del Conservador de Bienes Raíces de Lautaro. Para efectos tributarios, el inmueble se encuentra registrado ante el Servicio de Impuestos Internos bajo el Rol de Avalúo número {{inmuebles_de_dominio_constituyente.predios[4].rol_avaluo_sii}}.- f) Lote \"A\" de una superficie de {{inmuebles_de_dominio_constituyente.predios[5].superficie}}, en que se dividió el predio denominado \"Los Pilos de Muco\", ubicado en la comuna de {{inmuebles_de_dominio_constituyente.predios[5].comuna}}, y según plano que corre archivado bajo el número {{inmuebles_de_dominio_constituyente.predios[5].plano_archivado.numero}} del Registro de Propiedad de Lautaro, año {{inmuebles_de_dominio_constituyente.predios[5].plano_archivado.anio}}, dicho lote \"A\", tiene los siguientes deslindes: NORTE, con {{inmuebles_de_dominio_constituyente.predios[5].deslindes.norte}}; SUR, {{inmuebles_de_dominio_constituyente.predios[5].deslindes.sur}}; ORIENTE, con {{inmuebles_de_dominio_constituyente.predios[5].deslindes.oriente}}; PONIENTE, con {{inmuebles_de_dominio_constituyente.predios[5].deslindes.poniente}}. El dominio a su nombre rola inscrito a fojas {{inmuebles_de_dominio_constituyente.predios[5].inscripcion_cbr.fojas}}, número {{inmuebles_de_dominio_constituyente.predios[5].inscripcion_cbr.numero}} del Registro de Propiedad del año {{inmuebles_de_dominio_constituyente.predios[5].inscripcion_cbr.anio}} del Conservador de Bienes Raíces de Lautaro. Para efectos tributarios, el inmueble se encuentra registrado ante el Servicio de Impuestos Internos bajo el Rol de Avalúo número {{inmuebles_de_dominio_constituyente.predios[5].rol_avaluo_sii}}.- g) Inmueble denominado LOTE LOS PILOS DOS, en que se subdividió el Lote B, que resultó de la división del resto del Fundo Los Pilos de Muco ubicado en la comuna de {{inmuebles_de_dominio_constituyente.predios[6].comuna}}, según plano y memoria explicativa que se encuentra archivado bajo el número {{inmuebles_de_dominio_constituyente.predios[6].plano_archivado.numero}} del Registro de Propiedad de Lautaro del año {{inmuebles_de_dominio_constituyente.predios[6].plano_archivado.anio}}, tiene una superficie de {{inmuebles_de_dominio_constituyente.predios[6].superficie}} y los siguientes deslindes especiales: NORTE, {{inmuebles_de_dominio_constituyente.predios[6].deslindes.norte}}; SURESTE, {{inmuebles_de_dominio_constituyente.predios[6].deslindes.sureste}}; y OESTE, {{inmuebles_de_dominio_constituyente.predios[6].deslindes.oeste}}. El dominio a su nombre rola inscrito a fojas {{inmuebles_de_dominio_constituyente.predios[6].inscripcion_cbr.fojas}}, número {{inmuebles_de_dominio_constituyente.predios[6].inscripcion_cbr.numero}} del Registro de Propiedad del año {{inmuebles_de_dominio_constituyente.predios[6].inscripcion_cbr.anio}} del Conservador de Bienes Raíces de Lautaro. Para efectos tributarios, el inmueble se encuentra registrado ante el Servicio de Impuestos Internos bajo el Rol de Avalúo número {{inmuebles_de_dominio_constituyente.predios[6].rol_avaluo_sii}}.- h) Predio denominado \"{{inmuebles_de_dominio_constituyente.predios[7].denominacion}}\", con una cabida aproximada de {{inmuebles_de_dominio_constituyente.predios[7].superficie}}, ubicado en la comuna de {{inmuebles_de_dominio_constituyente.predios[7].comuna}}, cuyos deslindes particulares son los siguientes: NORTE, {{inmuebles_de_dominio_constituyente.predios[7].deslindes.norte}}; AL SUR, {{inmuebles_de_dominio_constituyente.predios[7].deslindes.sur}}; AL ORIENTE, con {{inmuebles_de_dominio_constituyente.predios[7].deslindes.oriente}}; y PONIENTE, {{inmuebles_de_dominio_constituyente.predios[7].deslindes.poniente}}. El dominio a su nombre rola inscrito a fojas {{inmuebles_de_dominio_constituyente.predios[7].inscripcion_cbr.fojas}}, número {{inmuebles_de_dominio_constituyente.predios[7].inscripcion_cbr.numero}} del Registro de Propiedad del año {{inmuebles_de_dominio_constituyente.predios[7].inscripcion_cbr.anio}} del Conservador de Bienes Raíces de Lautaro. Para efectos tributarios, el inmueble se encuentra registrado ante el Servicio de Impuestos Internos bajo el Rol de Avalúo número {{inmuebles_de_dominio_constituyente.predios[7].rol_avaluo_sii}}.- i) Resto que queda de un predio de cuarenta y dos hectáreas de superficie que forma parte del lote número uno de cuarenta y nueve hectáreas, resultante de la división del predio \"Las Pitras\" ubicado en Dollinco, comuna de {{inmuebles_de_dominio_constituyente.predios[8].comuna}}, cuyos deslindes especiales son los siguientes: NORTE, {{inmuebles_de_dominio_constituyente.predios[8].deslindes_lote_uno_general.norte}}; SUR, {{inmuebles_de_dominio_constituyente.predios[8].deslindes_lote_uno_general.sur}}; ESTE, {{inmuebles_de_dominio_constituyente.predios[8].deslindes_lote_uno_general.este}}; y OESTE, {{inmuebles_de_dominio_constituyente.predios[8].deslindes_lote_uno_general.oeste}}.- Este lote número uno se subdivide: Lote número uno parte a de {{inmuebles_de_dominio_constituyente.predios[8].subdivisiones[0].superficie}}, con los siguientes deslindes: NORTE, {{inmuebles_de_dominio_constituyente.predios[8].subdivisiones[0].deslindes.norte}}; SUR, {{inmuebles_de_dominio_constituyente.predios[8].subdivisiones[0].deslindes.sur}}; ESTE, {{inmuebles_de_dominio_constituyente.predios[8].subdivisiones[0].deslindes.este}}; y OESTE, {{inmuebles_de_dominio_constituyente.predios[8].subdivisiones[0].deslindes.oeste}}, y Lote número uno Parte B, de {{inmuebles_de_dominio_constituyente.predios[8].subdivisiones[1].superficie}} con los siguientes deslindes: NORTE, {{inmuebles_de_dominio_constituyente.predios[8].subdivisiones[1].deslindes.norte}}; SUR, {{inmuebles_de_dominio_constituyente.predios[8].subdivisiones[1].deslindes.sur}}; ESTE, {{inmuebles_de_dominio_constituyente.predios[8].subdivisiones[1].deslindes.este}}; y OESTE, {{inmuebles_de_dominio_constituyente.predios[8].subdivisiones[1].deslindes.oeste}}.- El dominio a su nombre rola inscrito a fojas {{inmuebles_de_dominio_constituyente.predios[8].inscripcion_cbr.fojas}}, número {{inmuebles_de_dominio_constituyente.predios[8].inscripcion_cbr.numero}} del Registro de Propiedad del año {{inmuebles_de_dominio_constituyente.predios[8].inscripcion_cbr.anio}} del Conservador de Bienes Raíces de Lautaro. Para efectos tributarios, el inmueble se encuentra registrado ante el Servicio de Impuestos Internos bajo el Rol de Avalúo número {{inmuebles_de_dominio_constituyente.predios[8].rol_avaluo_sii}}.- j) Bien raíz denominado \"{{inmuebles_de_dominio_constituyente.predios[9].denominacion}}\", de una superficie de {{inmuebles_de_dominio_constituyente.predios[9].superficie}}, formado por varios lotes de terreno que se encuentran separados unos de otros, ubicado en la comuna de {{inmuebles_de_dominio_constituyente.predios[9].comuna}}, y que son: A) Hijuela número nueve, de {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[0].superficie}} que deslinda: NORTE, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[0].deslindes.norte}}; ORIENTE, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[0].deslindes.oriente}}; SUR, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[0].deslindes.sur}}; y PONIENTE, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[0].deslindes.poniente}}.- B) Resto de la hijuela número nueve de {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[1].superficie}}, que deslinda: NORTE, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[1].deslindes.norte}}; ORIENTE, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[1].deslindes.oriente}}; SUR, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[1].deslindes.sur}}; y PONIENTE, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[1].deslindes.poniente}}; y C) hijuela número diez de {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[2].superficie}}, que deslinda: NORTE, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[2].deslindes.norte}}; ORIENTE, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[2].deslindes.oriente}}; SUR, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[2].deslindes.sur}}; y PONIENTE, {{inmuebles_de_dominio_constituyente.predios[9].lotes_componentes[2].deslindes.poniente}}. El dominio a su nombre rola inscrito a fojas {{inmuebles_de_dominio_constituyente.predios[9].inscripcion_cbr.fojas}}, número {{inmuebles_de_dominio_constituyente.predios[9].inscripcion_cbr.numero}} del Registro de Propiedad del año {{inmuebles_de_dominio_constituyente.predios[9].inscripcion_cbr.anio}} del Conservador de Bienes Raíces de Lautaro. Para efectos tributarios, el inmueble se encuentra registrado ante el Servicio de Impuestos Internos bajo los Roles de Avalúo números {{inmuebles_de_dominio_constituyente.predios[9].roles_avaluo_sii[0]}} y {{inmuebles_de_dominio_constituyente.predios[9].roles_avaluo_sii[1]}}.- SEGUNDO: En cumplimiento al acuerdo de la asamblea de la Comunidad Indígena, según consta en acta de asamblea de fecha {{usufructo.acuerdo_asamblea.fecha_acta}}, la que se acompaña a la presente escritura pública, viene en constituir derecho de usufructo en favor de doña {{comparecientes.usufructuaria.nombre}}, ya individualizada, sobre una porción de los inmuebles de su propiedad y que singularizó en la cláusula precedente.- TERCERO: El usufructo que se constituye en este acto, recae sobre un retazo de terreno de una superficie aproximada de {{usufructo.predio_sobre_el_que_recae.superficie_retazo}}, el que se encuentra situado en el inmueble denominado LOTE \"C\", con una superficie de {{inmuebles_de_dominio_constituyente.predios[4].superficie}}, en que se dividió el predio denominado \"Los Pilos de Muco\", ubicado en esta comuna de {{inmuebles_de_dominio_constituyente.predios[4].comuna}}, ya individualizado en la cláusula anterior. Para los efectos de la presente constitución el retazo de terreno sobre el cual se constituye el usufructo se individualiza como {{usufructo.predio_sobre_el_que_recae.denominacion_retazo}}, cuyos deslindes especiales son los siguientes: NORTE: {{usufructo.predio_sobre_el_que_recae.deslindes_retazo.norte}}; ESTE: {{usufructo.predio_sobre_el_que_recae.deslindes_retazo.este}}; Sur: {{usufructo.predio_sobre_el_que_recae.deslindes_retazo.sur}}; y oeste: {{usufructo.predio_sobre_el_que_recae.deslindes_retazo.oeste}}.- El lote ya individualizado ha sido establecido de conformidad con plano y minuta de deslindes confeccionados por don {{usufructo.predio_sobre_el_que_recae.plano_y_minuta.confeccionado_por}}, plano y minuta de deslindes que se acompañan a la presente escritura pública.- Documentos que se dejan agregados al final del Protocolo de Instrumentos Públicos a mi cargo bajo el número {{usufructo.predio_sobre_el_que_recae.plano_y_minuta.numero_protocolo_notarial}}.- No obstante, se deja expresa constancia que la presente escritura pública, minuta de deslindes y plano no constituyen subdivisión de los inmuebles, y sólo tiene por objeto constituir el derecho de usufructo respecto de una porción de éstos.- CUARTO: Se deja expresa constancia que los inmuebles objeto de la presente constitución de usufructo son tierras indígenas, de conformidad con lo establecido por el número cuatro del artículo doce de la Ley número diecinueve mil doscientos cincuenta y tres, por lo que de acuerdo con lo establecido en el inciso final del citado artículo doce del dicho cuerpo normativo, se encuentran exento del pago de impuestos territoriales.- QUINTO: La usuaria o beneficiaria, ya individualizada, declara bajo juramento que conoce la prohibición legal de ceder, prestar, arrendar o enajenar a cualquier título el Derecho de Usufructo que por este acto se constituye a su favor, conforme lo dispone el artículo ochocientos diecinueve del Código Civil.- SEXTO: El Derecho de Usufructo que se constituye en este acto, es a título gratuito y perpetuo, sin embargo, éste derecho en ningún caso durará menos de veinticinco años, contados desde la presente fecha, por lo que en el evento de que la usuaria o beneficiaria falleciere antes de cumplido el plazo señalado, ejercerán este derecho la sucesión hereditaria de la beneficiaria o usuaria hasta el cumplimiento del plazo ya indicado de conformidad con lo establecido por los artículos setecientos setenta y setecientos setenta y uno del Código Civil.- SEPTIMO: Los comparecientes dejan constancia en este acto, que el presente acto jurídico se encuentra autorizado por lo establecido por el inciso primero del artículo trece de la Ley número diecinueve mil doscientos cincuenta y tres, en relación con lo establecido por los artículos catorce y quince del Convenio cientos sesenta y nueve de la Organización Internacional del Trabajo de mil novecientos noventa y uno, ratificado por el Estado de Chile el año dos mil ocho.- OCTAVO: La facultad de doña {{comparecientes.constituyente.representantes_legales[0].nombre}} y don {{comparecientes.constituyente.representantes_legales[1].nombre}}, para representar a la Comunidad Indígena {{comparecientes.constituyente.nombre}}, consta en certificado de personalidad jurídica, emitido por la Corporación Nacional de Desarrollo Indígena de fecha {{comparecientes.constituyente.personeria_juridica.fecha_emision}}, teniendo la directiva una vigencia hasta el {{comparecientes.constituyente.personeria_juridica.vigencia_directiva_hasta}}.- Documento que se deja agregado al final del Protocolo de Instrumentos Públicos a mi cargo bajo el número {{comparecientes.constituyente.personeria_juridica.numero_protocolo_notarial}}.- NOVENO: Prohibición de Cambio de Destino.- De acuerdo a lo previsto en el artículo primero, inciso cuarto, del decreto ley número tres mil quinientos dieciséis, sobre División de Predios Rústicos, el Lote objeto de la presente constitución de usufructo, quedará afecto a la prohibición de cambiar su destino en los términos que establecen los artículos cincuenta y cinco y cincuenta y seis de la Ley General de Urbanismo y Construcciones.- DECIMO: Se faculta al portador de copia autorizada de la presente escritura pública para requerir del Conservador de Bienes Raíces respectivo, las inscripciones y subinscripciones que correspondan.- Conforme con la minuta redactada por el abogado don {{notaria.abogado_redactor_minuta}}.- \"Inserción de documentos: A requerimiento de los comparecientes se insertan los siguientes documentos: \"Servicio Impuestos Internos Online. Número {{documentos_insertos_protocolo[0].numero_documento_sii}}. Fecha de emisión. {{documentos_insertos_protocolo[0].fecha_emision}}. CERTIFICADO DE AVALUO FISCAL. Válido para el {{documentos_insertos_protocolo[0].semestre_validez}}. Comuna. {{documentos_insertos_protocolo[0].comuna}}. Número de rol. {{documentos_insertos_protocolo[0].rol}}. Dirección. {{documentos_insertos_protocolo[0].direccion_propiedad}}. Destino de la propiedad. {{documentos_insertos_protocolo[0].destino}}. Nombre del propietario. {{documentos_insertos_protocolo[0].propietario}}. Rol único tributario. {{documentos_insertos_protocolo[0].rut_propietario}}. Avaluó total. {{documentos_insertos_protocolo[0].avaluo_total_pesos}} pesos. Avaluó exento de impuestos. {{documentos_insertos_protocolo[0].avaluo_exento_pesos}} pesos. Avaluó afecto a Impuesto. {{documentos_insertos_protocolo[0].avaluo_afecto_pesos}} pesos. Nota: {{documentos_insertos_protocolo[0].nota_exencion_indigena}}. Firmado ilegible. Hay Timbre que dice {{documentos_insertos_protocolo[0].organismo_emisor}}\", [... se repite estructura para cada certificado de avalúo fiscal insertado ...] Conforme con las partes pertinentes de los documentos respectivos copiados que he tenido a la vista.- Así lo otorgan, y previa lectura y ratificación firman los comparecientes.- ANOTADA EN EL REPERTORIO CON EL NUMERO {{notaria.repertorio_numero}} RAYA {{notaria.repertorio_anio}}.- Doy Fé.-",
+    "pie_firmas": "FIRMA:\nNOMBRE: {{comparecientes.constituyente.representantes_legales[0].nombre}}\nRUT.: {{comparecientes.constituyente.representantes_legales[0].rut}}\np.p.: {{comparecientes.constituyente.nombre}}\nRUT.: {{comparecientes.constituyente.rut}}\n\nFIRMA:\nNOMBRE: {{comparecientes.constituyente.representantes_legales[1].nombre}}\nRUT.: {{comparecientes.constituyente.representantes_legales[1].rut}}\np.p.: {{comparecientes.constituyente.nombre}}\nRUT.: {{comparecientes.constituyente.rut}}\n\nFIRMA:\nNOMBRE: {{comparecientes.usufructuaria.nombre}}\nRUT.: {{comparecientes.usufructuaria.rut}}"
+  }
+}
