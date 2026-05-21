@@ -11,30 +11,7 @@ const bancoPreguntasAlucilex = require('./banco_preguntas.js');
 const bancoArticulosAlucilex = require('./banco_articulos.js');
 
 const app = express();
-// =========================================================================
-// !!! NUEVO: CONFIGURACIÓN ROBUSTA DE CORS (PUERTA DE SEGURIDAD) !!!
-// =========================================================================
-const originesPermitidos = [
-    'https://alucinet.cl', 
-    'https://www.alucinet.cl', 
-    'http://localhost:5000', 
-    'http://127.0.0.1:5000'
-];
-
-app.use(cors({
-    origin: function (origin, callback) {
-        // Permitir peticiones sin origen (scripts de terminal Node.js) o desde dominios en la lista blanca
-        if (!origin || originesPermitidos.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error('Bloqueado por política CORS del servidor de Alucilex'));
-        }
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-    credentials: true
-}));
-// =========================================================================
+app.use(cors());
 app.use(express.json());
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
