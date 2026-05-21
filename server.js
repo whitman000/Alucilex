@@ -168,9 +168,13 @@ function limpiarCaches() {
         const primerKey = cacheEmbeddings.keys().next().value;
         cacheEmbeddings.delete(primerKey);
     }
+    // PROTECCIÓN OOM (Out Of Memory): Evita que el servidor colapse por acumulación de sesiones de chat
+    if (conversaciones.size > 1000) {
+        const primerKey = conversaciones.keys().next().value;
+        conversaciones.delete(primerKey);
+    }
 }
 setInterval(limpiarCaches, 600000);
-
 // ========== BÚSQUEDA ROBUSTA DE ARTÍCULO Y DOCTRINA (ADAPTADO A METADATOS) ==========
 async function buscarArticuloPorNumero(numero) {
     try {
@@ -253,7 +257,11 @@ app.post('/api/consultar', async (req, res) => {
     // 1. Detección de Artículo
     let numeroArticuloDetectado = null;
     let articuloContenido = "";
-    const matchNumero = pregunta.match(/(?:art(?:[íi]culo|\.?)?\s*)?(\d{1,4})(?!\d)/i);
+    
+    // CORRECCIÓN ARQUITECTÓNICA: Se exige el prefijo "art" o "artículo" en la expresión regular.
+    // Esto previene que números sueltos (ej: "sociedad de 2 personas") secuestren la búsqueda hacia un artículo erróneo.
+    const matchNumero = pregunta.match(/\b(?:art[íi]culo|art\.?)\s*(\d{1,4})\b/i);
+    
     if (matchNumero && matchNumero[1]) {
         numeroArticuloDetectado = matchNumero[1];
     } else {
