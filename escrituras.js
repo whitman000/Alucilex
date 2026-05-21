@@ -1,14 +1,17 @@
 const express = require('express');
 const router = express.Router();
 
-// Ruta para obtener de forma liviana el menú estructurado de categorías y títulos
-router.get('/escrituras/menu', async (req, res) => {
+// =========================================================================
+// ENDPOINT CORREGIDO: CARGA MASIVA DE PLANTILLAS PARA EL FRONT-END
+// =========================================================================
+router.get('/escrituras/plantillas', async (req, res) => {
     try {
         const supabase = req.app.get('supabase');
         
+        // Extraemos todos los campos necesarios, incluyendo el cuerpo_matriz para el visor
         const { data, error } = await supabase
             .from('plantillas_legales')
-            .select('id, titulo, categoria')
+            .select('id, titulo, categoria, cuerpo_matriz, campos_config')
             .order('categoria', { ascending: true })
             .order('titulo', { ascending: true });
 
@@ -17,12 +20,12 @@ router.get('/escrituras/menu', async (req, res) => {
         }
         res.json(data);
     } catch (error) {
-        console.error("[ERROR ALUCILEX - MENÚ ESCRITURAS]:", error.message);
-        res.status(500).json({ error: "Error de conexión al cargar el menú de escrituras." });
+        console.error("[ERROR ALUCILEX - CARGA PLANTILLAS]:", error.message);
+        res.status(500).json({ error: "Error de conexión al cargar las plantillas." });
     }
 });
 
-// Ruta para obtener la matriz de texto completa y las variables de un escrito específico
+// Ruta individual (Se mantiene por seguridad estructural)
 router.get('/escrituras/:id', async (req, res) => {
     try {
         const idContrato = req.params.id;
@@ -43,6 +46,7 @@ router.get('/escrituras/:id', async (req, res) => {
         res.status(500).json({ error: "Error al cargar la matriz legal del contrato solicitado." });
     }
 });
+
 // =========================================================================
 // NUEVO ENDPOINT: AUDITORÍA DE RIESGO LEGAL CON INTELIGENCIA ARTIFICIAL
 // =========================================================================
