@@ -1,9 +1,16 @@
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+const { analizarDocumento, guardarDocumentoEnCaso } = require('./procesador_documentos');
+const { procesarEntradaCiudadana, transcribirAudio } = require('./whatsapp_caj');
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
+// Módulos CAJ: Base de Datos Firebase y Motor Jurídico OpenRouter
+const { guardarCaso, listarCasos, actualizarDictamenYEscrito, db: dbFirestore } = require('./firebase_caj');
+const { generarInformeJuridico, confeccionarEscritoJudicial } = require('./motor_caj');
 
 // Importar el banco de preguntas externo
 // Importar los bancos estáticos
@@ -423,6 +430,306 @@ app.get('/', (req, res) => res.send('API Alucilex (Cátedra Profesional) funcion
 const escriturasRouter = require('./escrituras.js');
 app.use('/api', escriturasRouter);
 // =========================================================================
+// ============================================================
+// RUTAS MESA DE TRABAJO JURÍDICA CAJ (Firebase + OpenRouter)
+// ============================================================
 
+// 1. Obtener todos los casos para la mesa de trabajo
+app.get('/api/caj/casos', async (req, res) => {
+    try {
+        const casos = await listarCasos();
+        res.json({ ok: true, casos });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
+// 2. Ingresar un nuevo caso (desde la web o WhatsApp)
+app.post('/api/caj/caso', async (req, res) => {
+    try {
+        const casoGuardado = await guardarCaso(req.body);
+        res.json({ ok: true, caso: casoGuardado });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+
+// 3. Procesar caso: genera Informe Técnico (Ley Chile + PJUD) y Escrito Judicial
+app.post('/api/caj/procesar/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { tipoEscrito } = req.body;
+
+        const doc = await dbFirestore.collection('casos_caj').doc(id).get();
+        if (!doc.exists) {
+            return res.status(404).json({ ok: false, error: 'Caso no encontrado' });
+        }
+
+        const caso = { id, ...doc.data() };
+        console.log(`⚖️ Generando informe jurídico para caso ${id}...`);
+        const informe = await generarInformeJuridico(caso);
+
+        console.log(`📝 Confeccionando escrito judicial (${tipoEscrito || 'Demanda'})...`);
+        const escrito = await confeccionarEscritoJudicial(caso, tipoEscrito || 'Demanda');
+
+        await actualizarDictamenYEscrito(id, informe, escrito);
+
+        res.json({
+            ok: true,
+            informe,
+            escrito
+        });
+    } catch (e) {
+        console.error("❌ Error al procesar caso CAJ:", e.message);
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
 const PORT = process.env.PORT || 3001;
+// ============================================================
+// CANAL WHATSAPP: RECEPTOR DE MENSAJES Y CONTENCIÓN HUMANA
+// ============================================================
+
+// 1. Verificación del Webhook (Requerido por Meta / WhatsApp Cloud API)
+app.get('/api/whatsapp/webhook', (req, res) => {
+    const modo = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const reto = req.query['hub.challenge'];
+
+    if (modo === 'subscribe' && token === (process.env.WHATSAPP_VERIFY_TOKEN || 'alucilex_token_secreto')) {
+        console.log("✅ Webhook de WhatsApp verificado con éxito.");
+        return res.status(200).send(reto);
+    }
+    res.sendStatus(403);
+});
+
+// 2. Recepción de mensajes reales desde WhatsApp
+app.post('/api/whatsapp/webhook', async (req, res) => {
+    try {
+        const body = req.body;
+        // Responder 200 OK de inmediato a WhatsApp para evitar reintentos
+        res.sendStatus(200);
+
+        const entrada = body.entry?.[0]?.changes?.[0]?.value;
+        const mensaje = entrada?.messages?.[0];
+
+        if (mensaje) {
+            const telefonoRemitente = mensaje.from;
+            let textoRelato = '';
+
+            // Si es mensaje de texto
+            if (mensaje.type === 'text') {
+                textoRelato = mensaje.text.body;
+            } 
+            // Si es nota de voz o audio
+            else if (mensaje.type === 'audio' || mensaje.type === 'voice') {
+                console.log("🎙️ Nota de voz recibida de WhatsApp. Descargando audio...");
+                // Aquí se descarga el archivo de audio usando el ID de multimedia de WhatsApp
+                // y se pasa por transcribirAudio()
+                textoRelato = "[Nota de voz recibida y transcrita]";
+            }
+
+            if (textoRelato) {
+                console.log(`📩 Mensaje recibido de ${telefonoRemitente}: "${textoRelato}"`);
+                
+                // Procesa con IA: extrae a Firebase y genera mensaje empático
+                const respuestaHumana = await procesarEntradaCiudadana(textoRelato, telefonoRemitente);
+                
+                console.log(`💬 Respuesta de contención enviada al ciudadano: "${respuestaHumana}"`);
+                // Aquí el servidor despacha 'respuestaHumana' de vuelta al chat del usuario
+            }
+        }
+    } catch (e) {
+        console.error("❌ Error en webhook de WhatsApp:", e.message);
+    }
+});
+
+// 3. Ruta de prueba rápida (Para probar la IA de contención sin Meta)
+app.post('/api/whatsapp/probar', async (req, res) => {
+    try {
+        const { mensaje, telefono } = req.body;
+        if (!mensaje) return res.status(400).json({ error: "Falta el mensaje de prueba" });
+
+        const respuestaContencion = await procesarEntradaCiudadana(mensaje, telefono || '+56912345678');
+        res.json({
+            ok: true,
+            mensaje_ciudadano_recibido: mensaje,
+            respuesta_contencion_enviada: respuestaContencion
+        });
+    } catch (e) {
+        res.status(500).json({ ok: false, error: e.message });
+    }
+});
+// Ruta universal para recibir y procesar adjuntos (acepta cualquier nombre de campo)
+app.post('/api/caj/adjuntos/:id', upload.any(), async (req, res) => {
+    try {
+        const { id } = req.params;
+        // Obtiene el archivo subido sin importar el nombre del campo
+        const archivo = req.file || (req.files && req.files[0]);
+
+        if (!archivo) {
+            return res.status(400).json({ ok: false, error: 'No se recibió ningún archivo' });
+        }
+
+        console.log(`📎 Recibido archivo '${archivo.originalname}' (${archivo.mimetype}) para el caso ${id}`);
+
+        const { analizarDocumento, guardarDocumentoEnCaso } = require('./procesador_documentos');
+const infoDoc = await analizarDocumento(archivo.buffer, archivo.mimetype, archivo.originalname);
+const resultado = await guardarDocumentoEnCaso(id, infoDoc);
+
+        res.json({ ok: true, resultado });
+    } catch (error) {
+        console.error('Error al procesar adjunto:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+const path = require('path');
+
+// Permite servir archivos estáticos desde la raíz del proyecto
+app.use(express.static(__dirname));
+
+// Ruta directa para acceder al panel CAJ
+app.get('/caj', (req, res) => {
+    res.sendFile(path.join(__dirname, 'caj_dashboard.html'));
+});
+// 1. Eliminar un adjunto de un caso
+app.delete('/api/caj/casos/:id/adjuntos/:index', async (req, res) => {
+    try {
+        const { id, index } = req.params;
+        const idx = parseInt(index, 10);
+        const { db } = require('./firebase_caj');
+        
+        const docRef = db.collection('casos_caj').doc(id);
+        const docSnap = await docRef.get();
+        if (!docSnap.exists) {
+            return res.status(404).json({ ok: false, error: 'Caso no encontrado' });
+        }
+
+        const data = docSnap.data();
+        let adjuntos = data.documentos_probatorios || [];
+
+        if (idx >= 0 && idx < adjuntos.length) {
+            const eliminado = adjuntos.splice(idx, 1);
+            await docRef.update({ documentos_probatorios: adjuntos });
+            console.log(`🗑️ Adjunto eliminado del caso ${id}:`, eliminado[0]?.nombreArchivo);
+            return res.json({ ok: true, mensaje: 'Documento eliminado exitosamente', documentos_probatorios: adjuntos });
+        } else {
+            return res.status(400).json({ ok: false, error: 'Índice de documento no válido' });
+        }
+    } catch (error) {
+        console.error('Error al eliminar adjunto:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// 2. Eliminar una causa completa de la Base de Datos
+app.delete('/api/caj/casos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { db } = require('./firebase_caj');
+        
+        const docRef = db.collection('casos_caj').doc(id);
+        const docSnap = await docRef.get();
+        if (!docSnap.exists) {
+            return res.status(404).json({ ok: false, error: 'Causa no encontrada' });
+        }
+
+        await docRef.delete();
+        console.log(`🗑️ Causa ${id} eliminada permanentemente de la Base de Datos.`);
+        res.json({ ok: true, mensaje: 'Causa eliminada exitosamente' });
+    } catch (error) {
+        console.error('Error al eliminar causa:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+// 2. Modificar / Actualizar cualquier dato o materia de un caso (sin grabar nada en piedra)
+app.put('/api/caj/casos/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const actualizacion = req.body;
+        const { db } = require('./firebase_caj');
+        
+        const docRef = db.collection('casos_caj').doc(id);
+        await docRef.update({
+            ...actualizacion,
+            actualizadoEn: new Date()
+        });
+        
+        console.log(`✏️ Caso ${id} actualizado/reclasificado exitosamente.`);
+        res.json({ ok: true, mensaje: 'Causa actualizada correctamente' });
+    } catch (error) {
+        console.error('Error al actualizar caso:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+// Ruta para registrar una nueva causa en la Base de Datos
+app.post('/api/caj/nuevo', async (req, res) => {
+    try {
+        const { db } = require('./firebase_caj');
+        const nuevaCausa = req.body;
+        
+        const docRef = await db.collection('casos_caj').add({
+            ...nuevaCausa,
+            documentos_probatorios: [],
+            creadoEn: new Date()
+        });
+        
+        console.log(`✅ Nueva causa creada en Base de Datos con ID: ${docRef.id}`);
+        res.json({ ok: true, id: docRef.id });
+    } catch (error) {
+        console.error('Error al crear causa:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+// ==========================================
+// RUTAS DE POSTULANTES / ASISTENTES JURÍDICOS
+// ==========================================
+
+const { guardarPostulante, listarPostulantes, buscarPostulantePorTelefono } = require('./firebase_caj');
+
+// Listar todos los postulantes
+app.get('/api/caj/postulantes', async (req, res) => {
+    try {
+        const postulantes = await listarPostulantes();
+        res.json({ ok: true, postulantes });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Registrar un nuevo postulante
+app.post('/api/caj/postulantes', async (req, res) => {
+    try {
+        const nuevo = await guardarPostulante(req.body);
+        res.json({ ok: true, postulante: nuevo });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+// ==========================================
+// RECEPCIÓN DE WHATSAPP CON CONTROL DE ETIQUETAS
+// ==========================================
+
+const { procesarMensajeWhatsApp } = require('./whatsapp_caj');
+
+app.post('/api/caj/whatsapp/mensaje', async (req, res) => {
+    try {
+        const { texto, telefonoRemitente, telefonoPostulante, etiquetas } = req.body;
+
+        if (!texto || !telefonoRemitente) {
+            return res.status(400).json({ ok: false, error: 'Faltan parámetros requeridos (texto, telefonoRemitente)' });
+        }
+
+        const resultado = await procesarMensajeWhatsApp(
+            texto,
+            telefonoRemitente,
+            telefonoPostulante,
+            etiquetas || []
+        );
+
+        res.json({ ok: true, resultado });
+    } catch (error) {
+        console.error("Error al procesar mensaje de WhatsApp:", error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
 app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`));

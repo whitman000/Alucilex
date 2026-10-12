@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alucilex - Sistema Forense CAJ (Derecho Chileno)</title>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --primary-light: #3b82f6;
+            --success: #059669;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); padding: 20px; }
+        header { background: var(--primary); color: white; padding: 18px 25px; border-radius: 10px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { font-size: 20px; font-weight: 600; }
+        .grid-container { display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+        .card { background: var(--card-bg); border-radius: 10px; border: 1px solid var(--border); padding: 18px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .card-title { font-size: 15px; font-weight: 600; color: var(--primary); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        label { display: block; font-size: 12px; font-weight: 600; margin-top: 10px; margin-bottom: 4px; color: #475569; }
+        input, select, textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; outline: none; }
+        input:focus, select:focus, textarea:focus { border-color: var(--primary-light); }
+        textarea { resize: vertical; min-height: 70px; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: 0.2s; }
+        .btn-primary { background: var(--primary); color: white; width: 100%; margin-top: 12px; }
+        .btn-primary:hover { background: #172554; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; padding: 4px 8px; font-size: 11px; }
+        .btn-outline { background: white; border: 1px solid var(--border); color: var(--text); }
+        .case-list { max-height: 480px; overflow-y: auto; }
+        .case-item { padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 10px; cursor: pointer; transition: 0.15s; background: #fff; }
+        .case-item:hover { border-color: var(--primary-light); background: #f0fdf4; }
+        .case-item.active { border-color: var(--primary); background: #eff6ff; }
+        .case-header { display: flex; justify-content: space-between; font-weight: 600; font-size: 13px; }
+        .case-meta { font-size: 11px; color: #64748b; margin-top: 4px; }
+        .badge { display: inline-block; padding: 2px 7px; border-radius: 12px; font-size: 10px; font-weight: 600; background: #e2e8f0; color: #334155; }
+        .badge-laboral { background: #fee2e2; color: #991b1b; }
+        .badge-familia { background: #dbeafe; color: #1e40af; }
+        .badge-civil { background: #fef3c7; color: #92400e; }
+        .doc-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; margin-top: 6px; font-size: 12px; }
+        .doc-name { font-weight: 600; }
+        .doc-glosa { font-size: 11px; color: #475569; margin-top: 2px; }
+        .box-upload { border: 2px dashed #cbd5e1; padding: 16px; text-align: center; border-radius: 8px; background: #f8fafc; margin-top: 10px; }
+        .result-box { background: white; border: 1px solid var(--border); border-radius: 8px; padding: 15px; margin-top: 12px; white-space: pre-wrap; font-size: 13px; max-height: 400px; overflow-y: auto; line-height: 1.5; font-family: inherit; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: white; padding: 22px; border-radius: 10px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+
+<header>
+    <div>
+        <h1>⚖️ Corporación de Asistencia Judicial (CAJ) - Alucilex</h1>
+        <small style="opacity: 0.85;">Diagnóstico Forense, Control de Pertinencia y Tramitación OJV</small>
+    </div>
+    <div id="statusServidor" style="font-size: 12px; background: rgba(255,255,255,0.2); padding: 5px 12px; border-radius: 20px;">🟢 Servidor Activo (Puerto 3001)</div>
+</header>
+
+<div class="grid-container">
+    <!-- COLUMNA IZQUIERDA: GESTIÓN DE CAUSAS -->
+    <div>
+        <!-- INGRESO DE NUEVA CAUSA -->
+        <div class="card">
+            <div class="card-title"><span>➕ Ingresar Nueva Causa</span></div>
+            <form id="formNuevaCausa">
+                <label>Nombre del Usuario:</label>
+                <input type="text" id="nuevoNombre" placeholder="Ej. Carlos Enrique Rosas" required>
+
+                <label>RUT:</label>
+                <input type="text" id="nuevoRut" placeholder="12.345.678-9">
+
+                <label>Rama y Materia del Derecho:</label>
+                <select id="nuevaMateria" required>
+                    <optgroup label="Derecho del Trabajo">
+                        <option value="Laboral - Despido Injustificado">Laboral (Despido Injustificado / Tutela)</option>
+                        <option value="Laboral - Cobro de Prestaciones">Laboral (Cobro de Prestaciones / Finiquito)</option>
+                    </optgroup>
+                    <optgroup label="Derecho de Familia">
+                        <option value="Familia - Alimentos">Familia (Alimentos y Liquidación)</option>
+                        <option value="Familia - Cuidado Personal">Familia (Cuidado Personal / Tuición)</option>
+                        <option value="Familia - Relación Directa">Familia (Relación Directa y Regular)</option>
+                        <option value="Familia - Divorcio">Familia (Divorcio)</option>
+                        <option value="Familia - VIF">Familia (Violencia Intrafamiliar)</option>
+                    </optgroup>
+                    <optgroup label="Derecho Civil">
+                        <option value="Civil - Comodato Precario">Civil (Comodato Precario)</option>
+                        <option value="Civil - Arrendamiento">Civil (Arrendamiento Ley 18.101)</option>
+                        <option value="Civil - Indemnización">Civil (Indemnización de Perjuicios)</option>
+                    </optgroup>
+                    <optgroup label="Otras">
+                        <option value="Policía Local">Policía Local (Tránsito / Consumidor)</option>
+                        <option value="Otra">Otra Materia a clasificar</option>
+                    </optgroup>
+                </select>
+
+                <label>Tribunal / RIT (si existe):</label>
+                <input type="text" id="nuevoTribunal" placeholder="Ej. Juzgado de Letras del Trabajo de San Bernardo">
+
+                <label>Contraparte (Demandado / Empleador):</label>
+                <input type="text" id="nuevaContraparte" placeholder="Ej. Liderman SpA">
+
+                <label>Relato de los Hechos:</label>
+                <textarea id="nuevosHechos" placeholder="Explicación detallada de los antecedentes de la causa..."></textarea>
+
+                <button type="submit" class="btn btn-primary">📁 Crear Expediente en BD</button>
+            </form>
+        </div>
+
+        <!-- LISTA DE CASOS EXISTENTES -->
+        <div class="card">
+            <div class="card-title">
+                <span>📑 Causas en Trámite</span>
+                <button class="btn btn-outline" style="padding: 2px 7px; font-size: 11px;" onclick="cargarCasos()">🔄 Actualizar</button>
+            </div>
+            <div class="case-list" id="listaCasos">
+                <div style="font-size: 12px; color: #64748b; text-align: center; padding: 15px;">Cargando causas...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- COLUMNA DERECHA: EXPEDIENTE ACTIVO, EVIDENCIA Y REDACCIÓN FORENSE -->
+    <div>
+        <!-- DATOS EDITABLES DEL EXPEDIENTE (NO GRABADOS EN PIEDRA) -->
+        <div class="card" id="panelExpediente" style="display: none;">
+            <div class="card-title">
+                <span>📁 Expediente Activo: <span id="expedienteId" style="font-family: monospace; color: #475569;"></span></span>
+                <span id="badgeMateria" class="badge"></span>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div>
+                    <label>Usuario / Demandante:</label>
+                    <input type="text" id="editUsuario">
+                </div>
+                <div>
+                    <label>Contraparte / Demandado:</label>
+                    <input type="text" id="editContraparte">
+                </div>
+                <div>
+                    <label>Materia (Editable libremente):</label>
+                    <select id="editMateria">
+                        <option value="Laboral - Despido Injustificado">Laboral - Despido Injustificado</option>
+                        <option value="Laboral - Cobro de Prestaciones">Laboral - Cobro de Prestaciones</option>
+                        <option value="Familia - Alimentos">Familia - Alimentos y Liquidación</option>
+                        <option value="Familia - Cuidado Personal">Familia - Cuidado Personal</option>
+                        <option value="Familia - Relación Directa">Familia - Relación Directa</option>
+                        <option value="Civil - Comodato Precario">Civil - Comodato Precario</option>
+                        <option value="Civil - Arrendamiento">Civil - Arrendamiento Ley 18.101</option>
+                        <option value="Otra">Otra Materia</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Tribunal Competente:</label>
+                    <input type="text" id="editTribunal">
+                </div>
+            </div>
+
+            <label>Relato de los Hechos:</label>
+            <textarea id="editHechos" style="min-height: 80px;"></textarea>
+
+            <button class="btn btn-outline" style="margin-top: 8px; width: 100%; border-color: var(--primary-light); color: var(--primary);" onclick="guardarCambiosCausa()">💾 Guardar Correcciones de la Causa en BD</button>
+        </div>
+
+        <!-- EVIDENCIA DOCUMENTAL Y ADJUNTOS -->
+        <div class="card" id="panelAdjuntos" style="display: none;">
+            <div class="card-title">
+                <span>📎 Evidencia Documental de la Causa</span>
+                <small style="color: #64748b;">(Se incorporan automáticamente al Primer Otrosí)</small>
+            </div>
+
+            <div id="listaAdjuntos">
+                <div style="font-size: 12px; color: #64748b;">No hay documentos probatorios adjuntos en esta causa.</div>
+            </div>
+
+            <div class="box-upload">
+                <input type="file" id="archivoAdjunto" accept=".pdf,image/*" style="margin-bottom: 8px;">
+                <p style="font-size: 11px; color: #64748b; margin-bottom: 8px;">Formatos aceptados: PDF, JPG, PNG (Contratos, Finiquitos, Certificados, Boletas)</p>
+                <button class="btn btn-success" style="width: 100%;" onclick="subirYAnalizarDocumento()">🔍 Subir y Analizar Documento con IA</button>
+            </div>
+        </div>
+
+        <!-- GENERACIÓN DE DICTAMEN Y ESCRITO JUDICIAL -->
+        <div class="card" id="panelGeneracion" style="display: none;">
+            <div class="card-title">
+                <span>⚖️ Asesoría Forense y Redacción Judicial</span>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <div style="flex: 1;">
+                    <label>Tipo de Escrito a Confeccionar:</label>
+                    <input type="text" id="tipoEscrito" placeholder="Ej: Demanda Laboral por Despido Injustificado / Demanda de Alimentos">
+                </div>
+                <button class="btn btn-primary" style="margin-top: 0; width: auto; padding: 10px 20px;" onclick="procesarCasoCompleto()">⚖️ Generar Dictamen y Escrito</button>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <h4 style="font-size: 13px; color: var(--primary);">1. Dictamen de Viabilidad y Control de Pertinencia:</h4>
+                <div class="result-box" id="resultadoInforme">El dictamen aparecerá aquí...</div>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <h4 style="font-size: 13px; color: var(--primary);">2. Borrador de Escrito para Tribunal (OJV):</h4>
+                <div class="result-box" id="resultadoEscrito">El escrito formal aparecerá aquí...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let casoActivoId = null;
+    let casoActivoData = null;
+
+    // Cargar casos al iniciar
+    window.onload = () => {
+        cargarCasos();
+    };
+
+    // CARGAR Y ACTUALIZAR LISTA DE CAUSAS (CON BOTÓN DE ELIMINAR)
+    async function cargarCasos() {
+        const btnActualizar = document.querySelector('button[onclick="cargarCasos()"]');
+        if (btnActualizar) btnActualizar.textContent = '⏳ Cargando...';
+
+        try {
+            const res = await fetch('/api/caj/casos');
+            const data = await res.json();
+            
+            const casos = Array.isArray(data) ? data : (data.casos || []);
+            const contenedor = document.getElementById('listaCasos');
+            contenedor.innerHTML = '';
+
+            if (casos.length === 0) {
+                contenedor.innerHTML = '<div style="font-size: 12px; color: #64748b; text-align: center; padding: 15px;">No hay causas registradas.</div>';
+                return;
+            }
+
+            casos.forEach(caso => {
+                const item = document.createElement('div');
+                item.className = `case-item ${caso.id === casoActivoId ? 'active' : ''}`;
+                
+                let badgeClass = 'badge-familia';
+                const mat = (caso.materia || '').toLowerCase();
+                if (mat.includes('laboral')) badgeClass = 'badge-laboral';
+                else if (mat.includes('civil')) badgeClass = 'badge-civil';
+
+                item.innerHTML = `
+                    <div class="case-header">
+                        <span>${caso.usuario_nombre || caso.usuario?.nombre || 'Usuario S/N'}</span>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <span class="badge ${badgeClass}">${caso.materia || 'General'}</span>
+                            <button class="btn btn-danger" title="Eliminar Causa" onclick="eliminarCausa('${caso.id}', event)">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="case-meta">
+                        ID: <code style="font-size: 10px; color: #1e3a8a;">${caso.id}</code><br>
+                        Contraparte: ${caso.contraparte_nombre || caso.contraparte?.nombre || 'S/D'}<br>
+                        Tribunal: ${caso.tribunal || caso.datos_causa?.tribunal || 'Por fijar'}
+                    </div>
+                `;
+                item.onclick = () => seleccionarCaso(caso);
+                contenedor.appendChild(item);
+            });
+
+            if (casoActivoId) {
+                const causaRefrescada = casos.find(c => c.id === casoActivoId);
+                if (causaRefrescada) {
+                    casoActivoData = causaRefrescada;
+                    renderizarAdjuntos(causaRefrescada.documentos_probatorios || []);
+                }
+            }
+
+        } catch (e) {
+            console.error('Error al cargar causas:', e);
+            alert('Error al cargar causas: ' + e.message);
+        } finally {
+            if (btnActualizar) {
+                btnActualizar.textContent = '✅ Actualizado';
+                setTimeout(() => { btnActualizar.textContent = '🔄 Actualizar'; }, 1000);
+            }
+        }
+    }
+
+    // ELIMINAR CAUSA COMPLETA
+    async function eliminarCausa(id, event) {
+        if (event) event.stopPropagation(); // Evita que se seleccione la causa al hacer clic en borrar
+        
+        if (!confirm(`¿Estás seguro de eliminar permanentemente la causa ID: ${id}?\nEsta acción no se puede deshacer.`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/caj/casos/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            
+            if (data.ok) {
+                alert('✅ Causa eliminada exitosamente.');
+                // Si la causa eliminada estaba abierta en pantalla, cerramos sus paneles
+                if (casoActivoId === id) {
+                    casoActivoId = null;
+                    casoActivoData = null;
+                    document.getElementById('panelExpediente').style.display = 'none';
+                    document.getElementById('panelAdjuntos').style.display = 'none';
+                    document.getElementById('panelGeneracion').style.display = 'none';
+                }
+                cargarCasos();
+            } else {
+                alert('Error al eliminar causa: ' + data.error);
+            }
+        } catch (e) {
+            alert('Error de conexión: ' + e.message);
+        }
+    }
+
+    function seleccionarCaso(caso) {
+        casoActivoId = caso.id;
+        casoActivoData = caso;
+
+        // Actualizar visualmente la selección en la lista
+        document.querySelectorAll('.case-item').forEach(el => {
+            el.classList.toggle('active', el.innerHTML.includes(caso.id));
+        });
+
+        document.getElementById('panelExpediente').style.display = 'block';
+        document.getElementById('panelAdjuntos').style.display = 'block';
+        document.getElementById('panelGeneracion').style.display = 'block';
+
+        // Llenar datos en los campos editables
+        document.getElementById('expedienteId').textContent = caso.id;
+        document.getElementById('badgeMateria').textContent = caso.materia || 'General';
+        document.getElementById('editUsuario').value = caso.usuario_nombre || caso.usuario?.nombre || '';
+        document.getElementById('editContraparte').value = caso.contraparte_nombre || caso.contraparte?.nombre || '';
+        document.getElementById('editMateria').value = caso.materia || 'Otra';
+        document.getElementById('editTribunal').value = caso.tribunal || caso.datos_causa?.tribunal || '';
+        document.getElementById('editHechos').value = Array.isArray(caso.hechos) ? caso.hechos.join('. ') : (caso.hechos || caso.relato_hechos || '');
+
+        // Sugerir tipo de escrito según la materia
+        const mat = (caso.materia || '').toLowerCase();
+        if (mat.includes('laboral')) {
+            document.getElementById('tipoEscrito').value = 'Demanda Laboral por Despido Injustificado y Cobro de Prestaciones';
+        } else if (mat.includes('alimento')) {
+            document.getElementById('tipoEscrito').value = 'Demanda de Alimentos y Liquidación de Deuda';
+        } else if (mat.includes('precario')) {
+            document.getElementById('tipoEscrito').value = 'Demanda Civil de Comodato Precario';
+        } else {
+            document.getElementById('tipoEscrito').value = 'Demanda según antecedentes';
+        }
+
+        renderizarAdjuntos(caso.documentos_probatorios || []);
+
+        if (caso.informe_juridico) document.getElementById('resultadoInforme').textContent = caso.informe_juridico;
+        if (caso.escrito_judicial) document.getElementById('resultadoEscrito').textContent = caso.escrito_judicial;
+    }
+
+    function renderizarAdjuntos(docs) {
+        const contenedor = document.getElementById('listaAdjuntos');
+        contenedor.innerHTML = '';
+        if (!docs || docs.length === 0) {
+            contenedor.innerHTML = '<div style="font-size: 12px; color: #64748b;">No hay documentos probatorios adjuntos en esta causa.</div>';
+            return;
+        }
+
+        docs.forEach((doc, idx) => {
+            const d = document.createElement('div');
+            d.className = 'doc-item';
+            d.innerHTML = `
+                <div style="flex: 1; padding-right: 10px;">
+                    <div class="doc-name">📄 ${doc.tipo || 'Documento'}: ${doc.nombreArchivo || 'S/N'}</div>
+                    <div class="doc-glosa">${doc.glosaOtrosi || doc.resumen || ''}</div>
+                </div>
+                <button class="btn btn-danger" onclick="eliminarAdjunto(${idx})">🗑️ Eliminar</button>
+            `;
+            contenedor.appendChild(d);
+        });
+    }
+
+    // ELIMINAR ADJUNTO
+    async function eliminarAdjunto(indice) {
+        if (!confirm('¿Deseas eliminar este documento probatorio de la causa?')) return;
+        try {
+            const res = await fetch(`/api/caj/casos/${casoActivoId}/adjuntos/${indice}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.ok) {
+                renderizarAdjuntos(data.documentos_probatorios);
+                // Actualizar caso local
+                casoActivoData.documentos_probatorios = data.documentos_probatorios;
+            } else {
+                alert('Error al eliminar: ' + data.error);
+            }
+        } catch (e) {
+            alert('Error al comunicarse con el servidor: ' + e.message);
+        }
+    }
+
+    // GUARDAR CAMBIOS EN LA CAUSA (NO GRABADA EN PIEDRA)
+    async function guardarCambiosCausa() {
+        if (!casoActivoId) return;
+        const actualizacion = {
+            usuario_nombre: document.getElementById('editUsuario').value,
+            contraparte_nombre: document.getElementById('editContraparte').value,
+            materia: document.getElementById('editMateria').value,
+            tribunal: document.getElementById('editTribunal').value,
+            hechos: [document.getElementById('editHechos').value]
+        };
+
+        try {
+            const res = await fetch(`/api/caj/casos/${casoActivoId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(actualizacion)
+            });
+            const data = await res.json();
+            if (data.ok) {
+                alert('✅ Cambios guardados correctamente en la causa.');
+                cargarCasos();
+            } else {
+                alert('Error al guardar: ' + data.error);
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    // CREAR NUEVA CAUSA MANUAL
+    document.getElementById('formNuevaCausa').onsubmit = async (e) => {
+        e.preventDefault();
+        const nuevaCausa = {
+            usuario_nombre: document.getElementById('nuevoNombre').value,
+            usuario_rut: document.getElementById('nuevoRut').value,
+            materia: document.getElementById('nuevaMateria').value,
+            tribunal: document.getElementById('nuevoTribunal').value,
+            contraparte_nombre: document.getElementById('nuevaContraparte').value,
+            hechos: [document.getElementById('nuevosHechos').value],
+            canal: 'web',
+            creadoEn: new Date()
+        };
+
+        try {
+            const res = await fetch('/api/caj/nuevo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nuevaCausa)
+            });
+            const data = await res.json();
+            if (data.ok) {
+                alert('✅ Causa creada con éxito con ID: ' + data.id);
+                document.getElementById('formNuevaCausa').reset();
+                cargarCasos();
+            }
+        } catch (err) {
+            alert('Error al crear causa: ' + err.message);
+        }
+    };
+
+    // SUBIR Y ANALIZAR DOCUMENTO
+    async function subirYAnalizarDocumento() {
+        const fileInput = document.getElementById('archivoAdjunto');
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert('Selecciona un archivo PDF o imagen primero.');
+            return;
+        }
+
+        const archivo = fileInput.files[0];
+        const formData = new FormData();
+        formData.append('documento', archivo);
+
+        const btn = event.target;
+        btn.textContent = '⏳ Analizando con IA...';
+        btn.disabled = true;
+
+        try {
+            // Subir al caso activo
+            const res = await fetch(`/api/caj/adjuntos/${casoActivoId}`, {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+
+            if (data.ok) {
+                alert('✅ Documento procesado y glosa probatoria extraída.');
+                fileInput.value = '';
+                // Recargar datos de la causa
+                const resC = await fetch('/api/caj/casos');
+                const datac = await resC.json();
+                const casoActualizado = datac.casos.find(c => c.id === casoActivoId);
+                if (casoActualizado) seleccionarCaso(casoActualizado);
+            } else {
+                alert('❌ Error: ' + data.error);
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        } finally {
+            btn.textContent = '🔍 Subir y Analizar Documento con IA';
+            btn.disabled = false;
+        }
+    }
+
+    // PROCESAR DICTAMEN Y ESCRITO
+    async function procesarCasoCompleto() {
+        if (!casoActivoId) return;
+        const btn = event.target;
+        btn.textContent = '⏳ Redactando con IA...';
+        btn.disabled = true;
+
+        const tipo = document.getElementById('tipoEscrito').value;
+
+        try {
+            const res = await fetch(`/api/caj/procesar/${casoActivoId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tipoEscrito: tipo })
+            });
+            const data = await res.json();
+
+            if (data.ok) {
+                document.getElementById('resultadoInforme').textContent = data.informe || 'Sin informe generado.';
+                document.getElementById('resultadoEscrito').textContent = data.escrito || 'Sin escrito generado.';
+            } else {
+                alert('Error al procesar: ' + data.error);
+            }
+        } catch (e) {
+            alert('Error de conexión: ' + e.message);
+        } finally {
+            btn.textContent = '⚖️ Generar Dictamen y Escrito';
+            btn.disabled = false;
+        }
+    }
+</script>
+
+</body>
+</html>
