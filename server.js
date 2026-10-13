@@ -751,7 +751,7 @@ app.post('/api/caj/auth/login', async (req, res) => {
 // ==========================================
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
-const { procesarMensajeWhatsApp } = require('./whatsapp_caj');
+
 
 const clientWA = new Client({
     authStrategy: new LocalAuth(),
