@@ -1,4 +1,4 @@
-// motor_caj.js - Motor de Diagnóstico Jurídico y Redacción Forense Integral (Derecho Chileno General)
+// motor_caj.js - Matriz Forense CAJ en 4 Fases (Derecho Chileno Integral)
 require('dotenv').config();
 const axios = require('axios');
 
@@ -6,10 +6,10 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const MODELO = process.env.MODELO_LEGAL || 'openai/gpt-4o-mini';
 
 /**
- * Normaliza y extrae el contenido completo de los documentos probatorios adjuntos
+ * Normaliza y extrae el contenido íntegro de los documentos adjuntos
  */
 function formatearDocumentosAdjuntos(documentos) {
-    if (!documentos || documentos.length === 0) return 'No se han adjuntado documentos.';
+    if (!documentos || documentos.length === 0) return 'No se han acompañado documentos aún.';
 
     return documentos.map((doc, idx) => {
         let d = doc;
@@ -18,65 +18,89 @@ function formatearDocumentosAdjuntos(documentos) {
         }
 
         const nombre = d.nombre_archivo || d.nombreArchivo || d.nombre || 'Archivo adjunto';
-        const tipo = d.tipo_documento || d.tipo || 'Documento';
+        const tipo = d.tipo_documento || d.tipo || 'Documento Probatorio';
         const resumen = d.resumen_probatorio || d.resumen || d.glosa_para_otrosi || d.glosaOtrosi || 'Sin resumen';
         const glosa = d.glosa_para_otrosi || d.glosaOtrosi || 'S/G';
         const textoCompleto = d.texto_extraido || d.textoExtraido || '';
 
         return `=======================================================
-[DOCUMENTO ADJUNTO ${idx + 1}]: ${tipo} (${nombre})
+[DOCUMENTO ADJUNTO #${idx + 1}]: ${tipo} (${nombre})
 - RESUMEN PROBATORIO Y DATOS EXTRAÍDOS:
 ${resumen}
 
-- GLOSA FORENSE SUGERIDA PARA EL OTROSÍ:
-${glosa}
-${textoCompleto ? `\n- TEXTO ÍNTEGRO DEL DOCUMENTO:\n${textoCompleto.slice(0, 3000)}` : ''}
+- GLOSA FORENSE SUGERIDA PARA PRIMER OTROSÍ:
+"${glosa}"
+${textoCompleto ? `\n- TEXTO ÍNTEGRO DEL DOCUMENTO:\n${textoCompleto.slice(0, 3500)}` : ''}
 =======================================================`;
     }).join('\n\n');
 }
 
 /**
- * 1. Genera el Dictamen Técnico de Viabilidad Jurídica bajo el ordenamiento chileno general
+ * PRODUCTO 1: Genera el Dictamen Técnico en 3 Fases (Ficha de Partes, Cronología y Hoja de Ruta CAJ)
  */
 async function generarInformeJuridico(caso) {
     const documentosTexto = formatearDocumentosAdjuntos(caso.documentos_probatorios);
 
-    const promptSistema = `Eres un Abogado Consultor Senior y Asesor Forense de la Corporación de Asistencia Judicial (CAJ) en Chile, experto en todo el ordenamiento jurídico nacional (Derecho del Trabajo, Derecho Civil, Derecho de Familia y Policía Local).
+    const promptSistema = `Eres un Abogado Tutor Senior y Asesor Forense de la Corporación de Asistencia Judicial (CAJ) en Chile, experto en litigación laboral, de familia y civil.
 
-REGLA DE ORO DE EXTRACCIÓN DOCUMENTAL (CRÍTICO):
-- Revisa exhaustivamente los DOCUMENTOS ADJUNTOS aportados al caso.
-- Si el relato de hechos ingresado manualmente es breve, genérico o de prueba, DEBES extraer y utilizar prioritariamente los hechos reales, las partes reales (Demandante, Demandado/Empleador, RUTs), las fechas, montos e incumplimientos que constan dentro de los DOCUMENTOS ADJUNTOS.
-- Determina autónomamente la materia real del caso a partir de lo que acreditan los documentos (ej: si hay una demanda laboral o carta de despido, encuadra en DERECHO DEL TRABAJO ante Juzgado de Letras del Trabajo, ignorando clasificaciones de prueba).
+Tu misión es emitir un DICTAMEN FORENSE DE ESTRATEGIA Y VIABILIDAD estructurado rigurosamente en las siguientes 3 Fases de la técnica procesal chilena:
 
-ESTRUCTURA OBLIGATORIA DEL DICTAMEN:
-I. SÍNTESIS DE ANTECEDENTES Y DETERMINACIÓN DE LA MATERIA JURÍDICA
-- Identificación de la rama del derecho aplicable y tribunal competente según los documentos.
-- Individualización real de las partes según los documentos analizados.
+======================================================================
+FASE 1: FICHA DE COMPARECENCIA E INDIVIDUALIZACIÓN PROCESAL
+(Art. 254 N° 2 y 3 CPC / Art. 57 Ley 19.968 / Art. 446 Código del Trabajo)
+======================================================================
+Extrae exhaustivamente todos los datos de los incumbentes (tanto del relato como de los documentos adjuntos):
+1. PARTE DEMANDANTE (ACTOR):
+   - Nombre completo:
+   - RUT:
+   - Profesión u oficio:
+   - Domicilio completo y Comuna:
+   - Contacto (teléfono y correo):
+2. PARTE DEMANDADA (CONTRAPARTE O EMPLEADOR):
+   - Nombre o Razón Social:
+   - RUT:
+   - Representante legal (si es persona jurídica) y RUT:
+   - Domicilio para notificaciones y Comuna:
+3. HIJOS / CARGAS / BENEFICIARIOS VINCULADOS:
+   - Nombres, RUTs, edades y situación de dependencia.
 
-II. MARCO LEGAL APLICABLE (DERECHO CHILENO)
-- Normativa positiva chilena aplicable (Código del Trabajo, Código Civil, Ley 19.968, etc.) con sus artículos exactos.
+======================================================================
+FASE 2: RECONSTRUCCIÓN CRONOLÓGICA Y CORRELACIÓN FÁCTICA
+======================================================================
+Cruza el relato del usuario con la evidencia de los documentos y construye una línea de tiempo ordenada:
+- Hito 1: Origen de la relación jurídica (Fecha y lugar de inicio de relación laboral, matrimonio o nacimiento).
+- Hito 2: Desarrollo fáctico y acuerdos previos.
+- Hito 3: Hecho detonante o incumplimiento (Despido, cese de pagos de pensión, cese de convivencia).
+- Hito 4: Consecuencias y perjuicio económico actual (Cesantía, montos adeudados, vulnerabilidad).
 
-III. CONTROL DE PERTINENCIA PROBATORIA Y VALORACIÓN DOCUMENTAL
-- Examen detallado de cada documento acompañado y su valor para sustentar la demanda.
+======================================================================
+FASE 3: DICTAMEN EN DERECHO Y HOJA DE RUTA PARA EL POSTULANTE
+======================================================================
+1. CALIFICACIÓN JURÍDICA DE LA ACCIÓN:
+   - Tipo exacto de demanda o acción a interponer y Tribunal Competente con jurisdicción territorial.
+2. MARCO LEGAL APLICABLE:
+   - Artículos específicos del Código del Trabajo, Código Civil, Ley N° 19.968 o Ley N° 14.908.
+3. TRÁMITES PREVIOS Y REQUISITOS DE ADMISIBILIDAD:
+   - Si es Familia: ¿Requiere acta de Mediación Frustrada previa obligatoria?
+   - Si es Laboral: ¿Se presentó reclamo en la Inspección del Trabajo para suspender la caducidad de 60 días?
+4. MEDIDAS CAUTELARES URGENTES:
+   - Peticiones previas o accesorias necesarias (alimentos provisorios, retención de sueldo, arraigo, embargo).
+5. CHECK-LIST DE PRUEBA FALTANTE:
+   - Lista concreta de documentos que el usuario todavía debe aportar para asegurar el juicio.`;
 
-IV. ESTRATEGIA PROCESAL, FORTALEZAS Y RIESGOS
-- Plazos de caducidad o prescripción aplicables.
-- Vía procedimental idónea.
-
-V. CHECK-LIST DE ANTECEDENTES PENDIENTES`;
-
-    const promptUsuario = `ANTECEDENTES REGISTRADOS:
-Materia indicada: ${caso.materia || 'Determinar según documentos'}
-Tribunal indicado: ${caso.tribunal || caso.datos_causa?.tribunal || 'Determinar según documentos'}
-Usuario: ${caso.usuario_nombre || caso.usuario?.nombre || 'No informado'} (RUT: ${caso.usuario_rut || caso.usuario?.rut || 'S/R'})
-Contraparte: ${caso.contraparte_nombre || caso.contraparte?.nombre || 'No informado'}
+    const promptUsuario = `ANTECEDENTES DEL EXPEDIENTE REGISTRADOS EN BD:
+RUT Titular: ${caso.rut_titular || caso.usuario_rut || 'S/R'}
+Materia referencial: ${caso.materia || 'Determinar según documentos'}
+Tribunal referencial: ${caso.tribunal || caso.datos_causa?.tribunal || 'Determinar según documentos'}
+Usuario informado: ${caso.usuario_nombre || caso.usuario?.nombre || 'No informado'} (RUT: ${caso.usuario_rut || caso.usuario?.rut || 'S/R'})
+Contraparte informada: ${caso.contraparte_nombre || caso.contraparte?.nombre || 'No informada'}
 Relato manual:
 ${Array.isArray(caso.hechos) ? caso.hechos.join('. ') : (caso.hechos || caso.relato_hechos || 'Sin relato manual')}
 
-DOCUMENTACIÓN Y EVIDENCIA ADJUNTA (FUENTE PRINCIPAL DE ANÁLISIS):
+EVIDENCIA Y DOCUMENTACIÓN ADJUNTA (FUENTE PRINCIPAL DE DATOS):
 ${documentosTexto}
 
-Emite el dictamen fundado en el derecho chileno que corresponda rigurosamente a estos antecedentes y documentos.`;
+Emite el dictamen forense completo con las Fases 1, 2 y 3.`;
 
     try {
         const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
@@ -96,50 +120,50 @@ Emite el dictamen fundado en el derecho chileno que corresponda rigurosamente a 
         return response.data.choices[0].message.content.trim();
     } catch (error) {
         const detalle = error.response ? JSON.stringify(error.response.data) : error.message;
-        throw new Error(`Error al generar informe jurídico: ${detalle}`);
+        throw new Error(`Error al generar dictamen forense: ${detalle}`);
     }
 }
 
 /**
- * 2. Confecciona el Borrador de Escrito Judicial según la sede y materia detectadas
+ * PRODUCTO 2: Confecciona el Borrador Forense formal para la OJV (Fase 4)
  */
 async function confeccionarEscritoJudicial(caso, tipoEscritoSolicitado, informePrevio) {
     const documentosTexto = formatearDocumentosAdjuntos(caso.documentos_probatorios);
 
-    const promptSistema = `Eres un Redactor Forense Especialista de la Corporación de Asistencia Judicial (CAJ) en Chile.
-Tu misión es redactar el borrador formal del escrito judicial para la tramitación electrónica del Poder Judicial chileno (Oficina Judicial Virtual).
+    const promptSistema = `Eres un Redactor Forense Senior de la Corporación de Asistencia Judicial (CAJ) en Chile.
+Tu misión es redactar la FASE 4: EL BORRADOR FORMAL DE ESCRITO JUDICIAL para ser ingresado electrónicamente a la Oficina Judicial Virtual (OJV) del Poder Judicial chileno.
 
-REGLAS FORENSES FUNDAMENTALES:
-1. PRIORIDAD DE LOS ANTECEDENTES DOCUMENTALES:
-   - Incorpora las partes reales, RUTs, fechas, relación contractual o hechos que consten en los DOCUMENTOS ADJUNTOS y en el informe previo, ignorando cualquier texto genérico de prueba.
-2. ADAPTACIÓN A LA SEDE JUDICIAL REAL:
-   - Si los documentos versan sobre materia laboral: Encabezar ante "S. J. L. DEL TRABAJO", estructurar demanda laboral (Despido Injustificado, Cobro de Prestaciones, Nulidad del Despido), citar Código del Trabajo y formular petitorio con indemnizaciones.
-   - Si versan sobre civil o familia: Adaptar a S. J. L. en lo Civil o Familia correspondientemente.
-3. ESTRUCTURA FORENSE CHILENA COMPLETA:
-   - Suma: EN LO PRINCIPAL, OTROSÍES.
-   - Tribunal competente.
-   - Individualización completa de demandante y demandado.
-   - Hechos detallados y fundantes derivados de los documentos.
-   - Fundamentos de Derecho.
-   - Petitorio formal con montos o pretensiones líquidas.
-   - PRIMER OTROSÍ: Documentos acompañados con su respectiva glosa procesal justificada.
-   - OTROSÍES ACCESORIOS: Medidas cautelares o diligencias; Privilegio de Pobreza y Patrocinio CAJ (Ley N° 17.995 y art. 6 Ley N° 18.120).`;
+REGLAS DE CONFECCIÓN FORENSE ESTRICTAS:
+1. SUMA Y TRIBUNAL:
+   - Suma formal completa (EN LO PRINCIPAL: Demanda...; PRIMER OTROSÍ: Documentos que se acompañan; SEGUNDO OTROSÍ: Medida cautelar si procede; TERCER OTROSÍ: Privilegio de pobreza y patrocinio).
+   - Presidido ante el Tribunal competente (S. J. L. de Letras del Trabajo, S. J. L. de Familia, etc.).
+2. COMPARECENCIA IMPECABLE (Utiliza los datos exactos individualizados en la Fase 1 del informe previo):
+   - "[Nombre Demandante], [profesión u oficio], cédula nacional de identidad N° [RUT], con domicilio en [dirección completa, comuna], a US., respetuosamente digo:"
+3. EXPOSICIÓN DE HECHOS:
+   - Redacción formal numerada derivada de la cronología de la Fase 2, fundamentada en los documentos.
+4. FUNDAMENTOS DE DERECHO:
+   - Articulación jurídica sustantiva y adjetiva de la Fase 3.
+5. PETITORIO LÍQUIDO Y CONCLUSIVO:
+   - Peticiones precisas, expresas y cuantitativas si procede.
+6. PRIMER OTROSÍ (DOCUMENTOS ACOMPAÑADOS):
+   - Incorpora cada documento probatorio adjunto acompañado con su glosa judicial formal, explicitando qué hecho acredita.
+7. OTROSÍES ACCESORIOS:
+   - Medida cautelar o provisoria si corresponde.
+   - Privilegio de pobreza y patrocinio y poder de la CAJ (Ley N° 17.995 y art. 6 Ley N° 18.120), fijando domicilio procesal y correo de la Corporación.`;
 
-    const promptUsuario = `ANTECEDENTES DEL EXPEDIENTE:
+    const promptUsuario = `EXPEDIENTE JUDICIAL:
+RUT Titular: ${caso.rut_titular || caso.usuario_rut || 'S/R'}
+Tipo de escrito solicitado: ${tipoEscritoSolicitado || 'Demanda correspondiente según antecedentes'}
 Materia: ${caso.materia || 'Determinar según documentos'}
 Tribunal: ${caso.tribunal || caso.datos_causa?.tribunal || 'Determinar según documentos'}
-Usuario: ${caso.usuario_nombre || caso.usuario?.nombre || 'No informado'} (RUT: ${caso.usuario_rut || caso.usuario?.rut || 'S/R'})
-Contraparte: ${caso.contraparte_nombre || caso.contraparte?.nombre || 'No informado'}
-Relato manual:
-${Array.isArray(caso.hechos) ? caso.hechos.join('. ') : (caso.hechos || caso.relato_hechos || '')}
 
-DOCUMENTOS ADJUNTOS EN LA CAUSA (DATOS REALES A UTILIZAR):
+DATOS DE LOS DOCUMENTOS ADJUNTOS:
 ${documentosTexto}
 
-DIAGNÓSTICO DEL INFORME PREVIO:
+ANÁLISIS PREVIO DEL INFORME (FASES 1, 2 Y 3):
 ${informePrevio || 'Sin informe previo'}
 
-TIPO DE ESCRITO: ${tipoEscritoSolicitado && tipoEscritoSolicitado !== 'Demanda de Alimentos y Liquidación' ? tipoEscritoSolicitado : 'Demanda idónea según los documentos acompañados'}`;
+Redacta el borrador formal de escrito judicial completo para la OJV.`;
 
     try {
         const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {

@@ -1,4 +1,4 @@
-// firebase_caj.js - Conexión Modular a Firebase Firestore para CAJ
+// firebase_caj.js - Conexión a Firestore con Expediente Único por RUT
 require('dotenv').config();
 const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
@@ -7,35 +7,28 @@ const fs = require('fs');
 
 let credencialFirebase = null;
 
-// 1. Prioridad Máxima: Variable de entorno en la nube de Render
+// 1. Variable de entorno en Render
 if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     try {
-        console.log("🔑 Usando variable de entorno FIREBASE_SERVICE_ACCOUNT");
         credencialFirebase = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
     } catch (e) {
         console.error("Error al parsear FIREBASE_SERVICE_ACCOUNT:", e);
     }
 }
-
-// 2. Secret File en /etc/secrets
+// 2. Secret File en Render
 if (!credencialFirebase && fs.existsSync('/etc/secrets/serviceAccountKey.json')) {
-    console.log("🔑 Usando Secret File de Render (/etc/secrets/serviceAccountKey.json)");
     credencialFirebase = require('/etc/secrets/serviceAccountKey.json');
 }
-
-// 3. Archivo local de desarrollo en tu computador
+// 3. Archivo local en tu PC
 if (!credencialFirebase) {
     const localPath = path.resolve(__dirname, 'serviceAccountKey.json');
     if (fs.existsSync(localPath)) {
-        console.log("🔑 Usando archivo local serviceAccountKey.json");
         credencialFirebase = require(localPath);
     }
 }
 
 if (getApps().length === 0) {
-    initializeApp({
-        credential: cert(credencialFirebase)
-    });
+    initializeApp({ credential: cert(credencialFirebase) });
     console.log("🔥 Firebase inicializado con éxito");
 }
 
@@ -43,39 +36,95 @@ const db = getFirestore();
 const coleccionCasos = db.collection('casos_caj');
 const coleccionPostulantes = db.collection('postulantes_caj');
 
+/**
+ * Limpia y normaliza el RUT chileno (ej: " 12.899.975-K " -> "12899975-K")
+ */
+function normalizarRUT(rut) {
+    if (!rut || typeof rut !== 'string') return null;
+    const limpio = rut.replace(/[^0-9kK]/g, '').toUpperCase();
+    if (limpio.length < 2) return null;
+    const cuerpo = limpio.slice(0, -1);
+    const dv = limpio.slice(-1);
+    return `${cuerpo}-${dv}`;
+}
+
 // ==========================================
-// GESTIÓN DE CASOS Y EXPEDIENTES
+// GESTIÓN DE EXPEDIENTE FORENSE POR RUT
 // ==========================================
 
 async function guardarCaso(datos) {
     try {
-        const nombreFinal = datos.usuario_nombre || datos.nombre || (datos.usuario && datos.usuario.nombre) || 'Usuario WhatsApp';
+        const rutTitular = normalizarRUT(datos.usuario_rut || datos.rut || (datos.usuario && datos.usuario.rut));
+        const nombreFinal = datos.usuario_nombre || datos.nombre || (datos.usuario && datos.usuario.nombre) || 'Usuario CAJ';
         const contraparteFinal = datos.contraparte_nombre || datos.contraparte || (datos.contraparte && datos.contraparte.nombre) || 'Por determinar';
-        const materiaFinal = datos.materia || (datos.datos_causa && datos.datos_causa.materia) || 'Laboral';
+        const materiaFinal = datos.materia || (datos.datos_causa && datos.datos_causa.materia) || 'General';
         const tribunalFinal = datos.tribunal || (datos.datos_causa && datos.datos_causa.tribunal) || 'Por determinar';
         const relatoFinal = datos.relato_hechos || (Array.isArray(datos.hechos) ? datos.hechos.join('. ') : datos.hechos) || '';
 
         const registro = {
+            rut_titular: rutTitular || 'SIN-RUT',
             canal: datos.canal || 'web',
             usuario_nombre: nombreFinal,
-            usuario: { nombre: nombreFinal, rut: datos.usuario_rut || datos.rut || '' },
+            usuario: {
+                nombre: nombreFinal,
+                rut: rutTitular || 'S/R',
+                telefono: datos.telefono || datos.telefono_contacto || '',
+                domicilio: datos.domicilio || '',
+                comuna: datos.comuna || '',
+                profesion: datos.profesion || ''
+            },
             contraparte_nombre: contraparteFinal,
-            contraparte: { nombre: contraparteFinal },
+            contraparte: {
+                nombre: contraparteFinal,
+                rut: datos.contraparte_rut || 'S/R',
+                domicilio: datos.contraparte_domicilio || ''
+            },
             materia: materiaFinal,
             datos_causa: { materia: materiaFinal, tribunal: tribunalFinal },
             tribunal: tribunalFinal,
             hechos: Array.isArray(datos.hechos) ? datos.hechos : [relatoFinal],
             relato_hechos: relatoFinal,
-            postulante_nombre: datos.postulante_nombre || 'Postulante en turno',
+            postulante_nombre: datos.postulante_nombre || 'Carlos Rosas',
             postulante_id: datos.postulante_id || 'sin_asignar',
             documentos_probatorios: datos.documentos_probatorios || [],
-            fecha_ingreso: new Date()
+            actualizadoEn: new Date()
         };
 
-        const docRef = await coleccionCasos.add(registro);
-        return { id: docRef.id, ...registro };
+        // Si tenemos un RUT válido, usamos el RUT como ID del expediente (ej: "EXP_12899975-2")
+        let docRef;
+        if (rutTitular) {
+            const idExpediente = `EXP_${rutTitular}`;
+            docRef = coleccionCasos.doc(idExpediente);
+            const docExistente = await docRef.get();
+
+            if (docExistente.exists) {
+                // Si ya existe el expediente para este RUT, lo complementamos
+                const dataPrevia = docExistente.data();
+                const hechosCombinados = [...(dataPrevia.hechos || []), ...registro.hechos];
+                const adjuntosCombinados = [...(dataPrevia.documentos_probatorios || []), ...registro.documentos_probatorios];
+                
+                await docRef.update({
+                    ...registro,
+                    hechos: hechosCombinados,
+                    documentos_probatorios: adjuntosCombinados,
+                    fecha_actualizacion: new Date()
+                });
+                console.log(`📁 Expediente complementado para RUT ${rutTitular} (ID: ${idExpediente})`);
+                return { id: idExpediente, ...registro, hechos: hechosCombinados };
+            } else {
+                registro.fecha_ingreso = new Date();
+                await docRef.set(registro);
+                console.log(`📁 Nuevo Expediente creado para RUT ${rutTitular} (ID: ${idExpediente})`);
+                return { id: idExpediente, ...registro };
+            }
+        } else {
+            // Si aún no informa RUT, se guarda con ID automático temporal
+            registro.fecha_ingreso = new Date();
+            docRef = await coleccionCasos.add(registro);
+            return { id: docRef.id, ...registro };
+        }
     } catch (error) {
-        console.error("Error al guardar caso:", error);
+        console.error("Error al guardar expediente por RUT:", error);
         throw error;
     }
 }
@@ -86,7 +135,7 @@ async function obtenerCaso(id) {
         if (!doc.exists) return null;
         return { id: doc.id, ...doc.data() };
     } catch (error) {
-        console.error("Error al obtener caso:", error);
+        console.error("Error al obtener expediente:", error);
         return null;
     }
 }
@@ -98,7 +147,7 @@ async function listarCasos() {
 
         casos.sort((a, b) => {
             const obtenerSegundos = (c) => {
-                const f = c.fecha_ingreso || c.creadoEn || c.actualizadoEn;
+                const f = c.actualizadoEn || c.fecha_actualizacion || c.fecha_ingreso;
                 if (!f) return 0;
                 if (f._seconds) return f._seconds;
                 if (f instanceof Date) return Math.floor(f.getTime() / 1000);
@@ -110,7 +159,7 @@ async function listarCasos() {
 
         return casos;
     } catch (error) {
-        console.error("Error al listar casos:", error);
+        console.error("Error al listar expedientes:", error);
         return [];
     }
 }
@@ -123,7 +172,25 @@ async function actualizarCaso(id, datos) {
         });
         return { id, ...datos };
     } catch (error) {
-        console.error("Error al actualizar caso:", error);
+        console.error("Error al actualizar expediente:", error);
+        throw error;
+    }
+}
+
+async function actualizarDictamenYEscrito(id, informe, escrito) {
+    try {
+        await coleccionCasos.doc(id).update({
+            informe_juridico: informe,
+            escrito_judicial: escrito,
+            analisis_juridico: informe,
+            escrito_borrador: escrito,
+            estado: 'escrito_listo',
+            fecha_actualizacion: new Date(),
+            actualizadoEn: new Date()
+        });
+        return { ok: true };
+    } catch (error) {
+        console.error("Error al actualizar dictamen y escrito:", error);
         throw error;
     }
 }
@@ -143,7 +210,6 @@ async function guardarPostulante(datos) {
             activo: datos.activo !== undefined ? datos.activo : true,
             fecha_registro: new Date()
         });
-        console.log(`👤 Postulante registrado con éxito ID: ${docRef.id}`);
         return { id: docRef.id, ...datos };
     } catch (error) {
         console.error("Error al registrar postulante:", error);
@@ -172,28 +238,10 @@ async function buscarPostulantePorTelefono(telefono) {
         return null;
     }
 }
-/**
- * Guarda el dictamen jurídico y el escrito forense en el expediente
- */
-async function actualizarDictamenYEscrito(id, informe, escrito) {
-    try {
-        await coleccionCasos.doc(id).update({
-            informe_juridico: informe,
-            escrito_judicial: escrito,
-            analisis_juridico: informe,
-            escrito_borrador: escrito,
-            estado: 'escrito_listo',
-            fecha_actualizacion: new Date(),
-            actualizadoEn: new Date()
-        });
-        return { ok: true };
-    } catch (error) {
-        console.error("Error al actualizar dictamen y escrito:", error);
-        throw error;
-    }
-}
+
 module.exports = {
     db,
+    normalizarRUT,
     guardarCaso,
     obtenerCaso,
     listarCasos,
