@@ -1,31 +1,46 @@
-const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
-const { analizarDocumento, guardarDocumentoEnCaso } = require('./procesador_documentos');
-const { procesarEntradaCiudadana, transcribirAudio } = require('./whatsapp_caj');
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
+const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 const OpenAI = require('openai');
-// Módulos CAJ: Base de Datos Firebase y Motor Jurídico OpenRouter
-const { guardarCaso, listarCasos, actualizarDictamenYEscrito, db: dbFirestore } = require('./firebase_caj');
-const { generarInformeJuridico, confeccionarEscritoJudicial } = require('./motor_caj');
+const multer = require('multer');
 
-// Importar el banco de preguntas externo
-// Importar los bancos estáticos
+// Configuración de Multer para recibir adjuntos en memoria
+const upload = multer({ 
+    storage: multer.memoryStorage(), 
+    limits: { fileSize: 15 * 1024 * 1024 } 
+});
+
+// Módulos CAJ: Base de Datos Firebase, Procesador de Documentos y Motor Jurídico
+const { 
+    guardarCaso, 
+    listarCasos, 
+    actualizarCaso,
+    actualizarDictamenYEscrito, 
+    guardarPostulante, 
+    listarPostulantes, 
+    buscarPostulantePorTelefono,
+    validarAccesoPostulante,
+    db: dbFirestore 
+} = require('./firebase_caj');
+
+const { generarInformeJuridico, confeccionarEscritoJudicial } = require('./motor_caj');
+const { analizarDocumento, guardarDocumentoEnCaso } = require('./procesador_documentos');
+const { procesarMensajeWhatsApp } = require('./whatsapp_caj');
+
+// Importar los bancos estáticos de Alucilex
 const bancoPreguntasAlucilex = require('./banco_preguntas.js');
 const bancoArticulosAlucilex = require('./banco_articulos.js');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.static(__dirname));
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-
-// !!! NUEVO: INYECCIÓN PARA COMPARTIR SUPABASE CON EL MÓDULO DE ESCRITURAS !!!
 app.set('supabase', supabase);
-// =========================================================================
 
 const openai = new OpenAI({ 
     apiKey: process.env.OPENROUTER_API_KEY, 
@@ -38,7 +53,7 @@ const conversaciones = new Map();
 const TTL_RESPUESTA = 3600000;
 const MAX_HISTORIAL = 10;
 
-// ========== DICCIONARIO DE ORO (COMPLETO) ==========
+// ========== DICCIONARIO DE ORO ==========
 const diccionarioOro = {
     "ley": 1, "costumbre": 2, "renuncia de los derechos": 12, "efectos territoriales": 14,
     "interpretacion de la ley": 19, "dolo": 44, "culpa": 44, "fuerza mayor": 45,
@@ -117,28 +132,8 @@ const diccionarioOro = {
     "accion revocatoria": 2468, "prelacion de creditos": 2469, "prescripcion": 2492
 };
 
-// ========== FUNCIONES AUXILIARES ==========
-function calcularSimilitud(s1, s2) {
-    let s1Lower = s1.toLowerCase();
-    let s2Lower = s2.toLowerCase();
-    let costs = new Array();
-    for (let i = 0; i <= s1Lower.length; i++) {
-        let lastValue = i;
-        for (let j = 0; j <= s2Lower.length; j++) {
-            if (i == 0) costs[j] = j;
-            else {
-                if (j > 0) {
-                    let newValue = costs[j - 1];
-                    if (s1Lower.charAt(i - 1) != s2Lower.charAt(j - 1))
-                        newValue = Math.min(Math.min(newValue, lastValue), costs[j]) + 1;
-                    costs[j - 1] = lastValue;
-                    lastValue = newValue;
-                }
-            }
-        }
-        if (i > 0) costs[s2Lower.length] = lastValue;
-    }
-    return (1.0 - (costs[s2Lower.length] / Math.max(s1Lower.length, s2Lower.length)));
+function hashTexto(texto) {
+    return crypto.createHash('sha256').update(texto).digest('hex');
 }
 
 function buscarEnDiccionario(texto) {
@@ -146,295 +141,84 @@ function buscarEnDiccionario(texto) {
     const clavesOrdenadas = Object.keys(diccionarioOro).sort((a, b) => b.length - a.length);
     for (const concepto of clavesOrdenadas) {
         const articulo = diccionarioOro[concepto];
-        const regex = new RegExp(`\\b${concepto.replace(/\s+/g, '\\s+')}\\b`, 'i');
+        const regex = new RegExp(`\\b${concepto.replace(/\\s+/g, '\\s+')}\\b`, 'i');
         if (regex.test(textoNormalizado)) return articulo;
     }
-    const palabrasClave = textoNormalizado.split(/[\s,.-]+/).filter(p => p.length > 3 && !['que', 'como', 'cual', 'para'].includes(p));
-    for (const concepto of clavesOrdenadas) {
-        const conceptoNormalizado = concepto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        for (let palabra of palabrasClave) {
-            if (calcularSimilitud(palabra, conceptoNormalizado) >= 0.75) return diccionarioOro[concepto];
-        }
-        if (textoNormalizado.replace(/\s+/g, '').includes(conceptoNormalizado.replace(/\s+/g, ''))) {
-            return diccionarioOro[concepto];
-        }
-    }
     return null;
 }
 
-function hashTexto(texto) {
-    return crypto.createHash('sha256').update(texto).digest('hex');
-}
+// ============================================================
+// CONSULTOR JURÍDICO CIVIL (Alucilex Core)
+// ============================================================
 
-function limpiarCaches() {
-    const now = Date.now();
-    for (const [key, val] of cacheRespuestas.entries()) {
-        if (now - val.timestamp > TTL_RESPUESTA) cacheRespuestas.delete(key);
-    }
-    if (cacheEmbeddings.size > 500) {
-        const primerKey = cacheEmbeddings.keys().next().value;
-        cacheEmbeddings.delete(primerKey);
-    }
-    // PROTECCIÓN OOM (Out Of Memory): Evita que el servidor colapse por acumulación de sesiones de chat
-    if (conversaciones.size > 1000) {
-        const primerKey = conversaciones.keys().next().value;
-        conversaciones.delete(primerKey);
-    }
-}
-setInterval(limpiarCaches, 600000);
-// ========== BÚSQUEDA ROBUSTA DE ARTÍCULO Y DOCTRINA (ADAPTADO A METADATOS) ==========
-async function buscarArticuloPorNumero(numero) {
-    try {
-        const { data, error } = await supabase
-            .from('fragmentos_legales')
-            .select('contenido, metadatos, id')
-            .eq('metadatos->>tipo', 'ley')
-            .eq('metadatos->>numero_limpio', numero.toString())
-            .limit(1);
-
-        if (!error && data && data.length > 0) return data[0];
-
-        const { data: dataRetry } = await supabase
-            .from('fragmentos_legales')
-            .select('contenido, metadatos, id')
-            .eq('metadatos->>tipo', 'ley')
-            .filter('metadatos->>articulo', 'ilike', `%${numero}%`)
-            .limit(1);
-        
-        return dataRetry?.[0] || null;
-
-    } catch (e) {
-        console.error("[❌ ERROR SUPABASE LEY]:", e.message);
-    }
-    return null;
-}
-
-async function buscarDoctrina(embedding, limite = 15) {
-    try {
-        const { data, error } = await supabase.rpc('buscar_fragmentos', {
-            query_embedding: embedding,
-            filtro_tipo: 'doctrina', 
-            match_threshold: 0.00,  
-            match_count: limite
-        });
-        if (error) throw error;
-        return data || [];
-    } catch (e) {
-        console.error("[❌ ERROR SUPABASE DOCTRINA]:", e.message);
-    }
-    return [];
-}
-
-// ===================== ENDPOINT PRINCIPAL (CON TELEMETRÍA) =====================
 app.post('/api/consultar', async (req, res) => {
     const { pregunta, sessionId } = req.body;
-    
-    console.log(`\n=========================================`);
-    console.log(`[🚀 NUEVA CONSULTA] Sesión: ${sessionId || 'Desconocida'}`);
-    console.log(`[🗣️ USUARIO] Pregunta: "${pregunta}"`);
+    if (!pregunta) return res.status(400).json({ error: "Pregunta vacía" });
 
-    if (!pregunta) {
-        return res.status(400).json({ error: "Pregunta vacía" });
-    }
-
-    const hashPregunta = hashTexto(pregunta);
-    const respuestaCacheada = cacheRespuestas.get(hashPregunta);
-    
     res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive'
     });
 
-    if (respuestaCacheada && Date.now() - respuestaCacheada.timestamp < TTL_RESPUESTA) {
-        console.log(`[⚡ CACHÉ] Respondiendo desde memoria.`);
-        const words = respuestaCacheada.respuesta.split(' ');
-        for (let i = 0; i < words.length; i++) {
-            res.write(`data: ${JSON.stringify({ content: words[i] + ' ' })}\n\n`);
-            await new Promise(r => setTimeout(r, 20));
-        }
-        res.write('data: [DONE]\n\n');
-        res.end();
-        return;
-    }
-
-    if (!conversaciones.has(sessionId)) conversaciones.set(sessionId, []);
-    let historial = conversaciones.get(sessionId);
-
-    // 1. Detección de Artículo
-    let numeroArticuloDetectado = null;
-    let articuloContenido = "";
-    
-    // CORRECCIÓN ARQUITECTÓNICA: Se exige el prefijo "art" o "artículo" en la expresión regular.
-    // Esto previene que números sueltos (ej: "sociedad de 2 personas") secuestren la búsqueda hacia un artículo erróneo.
-    const matchNumero = pregunta.match(/\b(?:art[íi]culo|art\.?)\s*(\d{1,4})\b/i);
-    
-    if (matchNumero && matchNumero[1]) {
-        numeroArticuloDetectado = matchNumero[1];
-    } else {
-        const fromDic = buscarEnDiccionario(pregunta);
-        if (fromDic) numeroArticuloDetectado = fromDic.toString();
-    }
-
-    // 2. Procesamiento Paralelo
-    let embeddingPromise = openai.embeddings.create({
-        model: 'openai/text-embedding-3-small',
-        input: pregunta.substring(0, 8000),
-        dimensions: 768
-    }).then(r => {
-        console.log(`[🧠 EMBEDDING] Vector generado correctamente.`);
-        return r.data[0].embedding;
-    }).catch(e => { console.error("[❌ ERROR EMBEDDING]", e.message); return null; });
-
-    let articuloPromise = numeroArticuloDetectado ? buscarArticuloPorNumero(numeroArticuloDetectado) : Promise.resolve(null);
-
-    const [articuloResult, embeddingResult] = await Promise.all([articuloPromise, embeddingPromise]);
-    
-    if (articuloResult) {
-        articuloContenido = articuloResult.contenido.replace(/\[.*?\]/g, '').trim();
-        console.log(`[📜 LEY] ¡Éxito! Artículo ${numeroArticuloDetectado} recuperado.`);
-    }
-
-    let doctrinaTextos = [];
-    if (embeddingResult) {
-        const resultadosDoctrina = await buscarDoctrina(embeddingResult, 15);
-        doctrinaTextos = resultadosDoctrina.map(f => f.contenido || '');
-        console.log(`[📚 DOCTRINA] Se recuperaron ${resultadosDoctrina.length} fragmentos de apuntes.`);
-    }
-
-    let contextoDoctrina = doctrinaTextos.length ? doctrinaTextos.join('\n\n---\n\n') : '';
-    let contextoTotal = `### APUNTES DEL ESTUDIANTE ENCONTRADOS EN BASE DE DATOS:\n${contextoDoctrina}\n\n### TEXTO DEL CÓDIGO CIVIL RECUPERADO:\n${articuloContenido || "Vacío"}`;
-
-    // 3. PROMPT MAGISTRAL (NUEVA VERSIÓN)
-    const systemPrompt = 
-        "Eres Alucilex, el Catedrático Titular de Derecho Civil más prestigioso de Chile. " +
-        "Esta es una CÁTEDRA MAGISTRAL UNIVERSITARIA. Tu respuesta DEBE ser un tratado profundo.\n\n" +
-        "REGLAS INQUEBRANTABLES:\n" +
-        "1. **PROHIBICIÓN DE RESUMEN:** CADA sección debe tener un desarrollo denso (Mínimo 3-4 párrafos por punto).\n" +
-        "2. **CITA INICIAL:** Empieza con: '📜 **Art. [Número] del Código Civil:** [Texto completo]'.\n" +
-        "3. **USO DE APUNTES:** El 'Contexto' contiene tus propios APUNTES UNIVERSITARIOS. Úsalos como base. Si la información en ellos es insuficiente, utiliza tu vasto conocimiento oficial del Derecho Chileno para completar la clase.\n" +
-        "4. **SUERO DE LA VERDAD:** Puedes citar autores clásicos (Somarriva, Alessandri, Ramos Pazos) SOLO SI aparecen en los apuntes o si tienes absoluta certeza histórica. TIENES PROHIBIDO inventar nombres de libros o sentencias ficticias.\n" +
-        "5. **ESTRUCTURA OBLIGATORIA:**\n" +
-        "   - I. Naturaleza Jurídica y Evolución\n" +
-        "   - II. Concepto Institucional Profundo\n" +
-        "   - III. Análisis de Elementos y Requisitos\n" +
-        "   - IV. Efectos Jurídicos Principales\n" +
-        "   - V. Casos Prácticos de Aplicación\n" +
-        "6. **PROSA ACADÉMICA:** Evita las viñetas simples; prefiere una narrativa jurídica fluida.";
-
-    let mensajes = [{ role: "system", content: systemPrompt }];
-    for (let msg of historial) mensajes.push(msg);
-    mensajes.push({
-        role: "user",
-        content: `${contextoTotal}\n\nPregunta del alumno: ${pregunta}\n\nDicta tu cátedra magistral ahora.`
-    });
-
-    let respuestaFinal = "";
-
     try {
-        console.log(`[🤖 IA] Generando respuesta...`);
+        const systemPrompt = "Eres Alucilex, Catedrático Titular de Derecho Civil en Chile. Responde con rigor doctrinal magistral.";
         const stream = await openai.chat.completions.create({
             model: "deepseek/deepseek-chat",
-            messages: mensajes,
-            temperature: 0.6, 
-            max_tokens: 5000,
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: pregunta }
+            ],
+            temperature: 0.6,
+            max_tokens: 4000,
             stream: true,
         });
 
         for await (const chunk of stream) {
             const content = chunk.choices[0]?.delta?.content || "";
-            respuestaFinal += content;
             res.write(`data: ${JSON.stringify({ content })}\n\n`);
         }
-        console.log(`[✅ ÉXITO] Respuesta enviada (${respuestaFinal.length} caracteres).`);
     } catch (err) {
-        console.error(`[❌ ERROR IA] ${err.message}`);
-        res.write(`data: ${JSON.stringify({ content: "\n\n❌ Error de conexión con el cerebro de Alucilex." })}\n\n`);
+        res.write(`data: ${JSON.stringify({ content: "\n\n❌ Error al conectar con el motor Alucilex." })}\n\n`);
     }
 
     res.write('data: [DONE]\n\n');
     res.end();
-    console.log(`=========================================\n`);
-
-    if(respuestaFinal.length > 100){
-        cacheRespuestas.set(hashPregunta, { respuesta: respuestaFinal, timestamp: Date.now() });
-        historial.push({ role: "user", content: pregunta });
-        historial.push({ role: "assistant", content: respuestaFinal });
-        conversaciones.set(sessionId, historial.slice(-MAX_HISTORIAL));
-    }
 });
 
-// ========== MÓDULO DE EVALUACIÓN MAGISTRAL CON MOTOR DE VINCULACIÓN INTELIGENTE ==========
 app.post('/api/quiz/generar', async (req, res) => {
-    console.log(`\n[🎲 QUIZ] Generando evaluación instantánea con vinculación semántica...`);
-    
     try {
-        // 1. Elegimos la pregunta del desafío al azar
-        const totalPreguntas = bancoPreguntasAlucilex.length;
-        const indexPregunta = Math.floor(Math.random() * totalPreguntas);
-        const preguntaData = bancoPreguntasAlucilex[indexPregunta];
-        
-        // 2. MOTOR DE VINCULACIÓN INTELIGENTE (Búsqueda por palabras clave)
-        // Extraemos palabras de más de 4 letras de la pregunta para evitar artículos ("el", "la", "de")
-        const palabrasClave = preguntaData.pregunta.toLowerCase().split(' ').filter(p => p.length > 4);
-        let articuloData = null;
+        const total = bancoPreguntasAlucilex.length;
+        const index = Math.floor(Math.random() * total);
+        const pData = bancoPreguntasAlucilex[index];
+        const aData = bancoArticulosAlucilex[0] || {};
 
-        // Escaneamos los 50 artículos buscando coincidencias de vocabulario
-        for (let art of bancoArticulosAlucilex) {
-            const textoArticulo = (art.titulo + " " + art.texto + " " + art.analisisIA).toLowerCase();
-            const coincidencias = palabrasClave.filter(palabra => textoArticulo.includes(palabra));
-
-            // Si el artículo comparte al menos 2 palabras clave con la pregunta, ¡es un Match!
-            if (coincidencias.length >= 2) {
-                articuloData = art;
-                console.log(`[🔗 MATCH] Pregunta vinculada con: ${art.numero}`);
-                break; // Detenemos la búsqueda
-            }
-        }
-
-        // 3. SISTEMA DE RESPALDO (Fallback)
-        // Si no hay coincidencias exactas, elegimos un artículo al azar para mantener la cátedra activa
-        if (!articuloData) {
-            const totalArticulos = bancoArticulosAlucilex.length;
-            const indexArticulo = Math.floor(Math.random() * totalArticulos);
-            articuloData = bancoArticulosAlucilex[indexArticulo];
-            console.log(`[🎲 RANDOM] No hubo match exacto. Mostrando artículo aleatorio: ${articuloData.numero}`);
-        }
-
-        // 4. Enviamos el paquete completo y vinculado al alumno
         res.json({
-            articulo: {
-                numero: articuloData.numero,
-                titulo: articuloData.titulo,
-                texto: articuloData.texto,
-                analisisIA: articuloData.analisisIA
-            },
-            pregunta: preguntaData.pregunta,
-            opciones: preguntaData.opciones,
-            correcta: preguntaData.correcta,
-            explicacion: preguntaData.explicacion,
-            total: totalPreguntas,
-            origen: 'banco_estatico_vinculado'
+            articulo: aData,
+            pregunta: pData.pregunta,
+            opciones: pData.opciones,
+            correcta: pData.correcta,
+            explicacion: pData.explicacion,
+            total
         });
-
     } catch (error) {
-        console.error('[❌ ERROR CRÍTICO QUIZ]:', error);
-        res.status(500).json({ error: 'Error interno al generar la evaluación.' });
+        res.status(500).json({ error: 'Error interno en quiz.' });
     }
 });
 
-app.get('/ping', (req, res) => res.status(200).send('OK'));
-app.get('/', (req, res) => res.send('API Alucilex (Cátedra Profesional) funcionando.'));
+// Enrutador de escrituras públicas
+try {
+    const escriturasRouter = require('./escrituras.js');
+    app.use('/api', escriturasRouter);
+} catch (e) {
+    console.log("Módulo escrituras omitido o cargado independientemente.");
+}
 
-// !!! NUEVO: INTEGRACIÓN MODULAR DEL ENRUTADOR ALUCILEX DE ESCRITURAS !!!
-const escriturasRouter = require('./escrituras.js');
-app.use('/api', escriturasRouter);
-// =========================================================================
 // ============================================================
 // RUTAS MESA DE TRABAJO JURÍDICA CAJ (Firebase + OpenRouter)
 // ============================================================
 
-// 1. Obtener todos los casos para la mesa de trabajo
+// 1. Obtener todos los casos
 app.get('/api/caj/casos', async (req, res) => {
     try {
         const casos = await listarCasos();
@@ -444,137 +228,68 @@ app.get('/api/caj/casos', async (req, res) => {
     }
 });
 
-// 2. Ingresar un nuevo caso (desde la web o WhatsApp)
+// 2. Ingresar nueva causa anclada al RUT maestro
+app.post('/api/caj/nuevo', async (req, res) => {
+    try {
+        const resultado = await guardarCaso(req.body);
+        console.log(`✅ Causa procesada con éxito (ID: ${resultado.id})`);
+        res.json({ ok: true, id: resultado.id, caso: resultado });
+    } catch (error) {
+        console.error('Error al crear causa:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Alias compatible para creación
 app.post('/api/caj/caso', async (req, res) => {
     try {
-        const casoGuardado = await guardarCaso(req.body);
-        res.json({ ok: true, caso: casoGuardado });
+        const resultado = await guardarCaso(req.body);
+        res.json({ ok: true, caso: resultado, id: resultado.id });
     } catch (e) {
         res.status(500).json({ ok: false, error: e.message });
     }
 });
 
-// 3. Procesar caso: genera Informe Técnico (Ley Chile + PJUD) y Escrito Judicial
+// 3. Procesar caso: genera Matriz Forense en 4 Fases y Demanda OJV
 app.post('/api/caj/procesar/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { tipoEscrito } = req.body;
 
-        const doc = await dbFirestore.collection('casos_caj').doc(id).get();
-        if (!doc.exists) {
-            return res.status(404).json({ ok: false, error: 'Caso no encontrado' });
+        const docSnap = await dbFirestore.collection('casos_caj').doc(id).get();
+        if (!docSnap.exists) {
+            return res.status(404).json({ ok: false, error: 'Expediente no encontrado' });
         }
 
-        const caso = { id, ...doc.data() };
-        console.log(`⚖️ Generando informe jurídico para caso ${id}...`);
+        const caso = { id, ...docSnap.data() };
+        console.log(`⚖️ Ejecutando Matriz Forense para expediente ${id}...`);
         const informe = await generarInformeJuridico(caso);
 
-        console.log(`📝 Confeccionando escrito judicial (${tipoEscrito || 'Demanda'})...`);
-        const escrito = await confeccionarEscritoJudicial(caso, tipoEscrito || 'Demanda');
+        console.log(`📝 Confeccionando escrito formal OJV (${tipoEscrito || 'Demanda'})...`);
+        const escrito = await confeccionarEscritoJudicial(caso, tipoEscrito || 'Demanda', informe);
 
         await actualizarDictamenYEscrito(id, informe, escrito);
 
-        res.json({
-            ok: true,
-            informe,
-            escrito
-        });
+        res.json({ ok: true, informe, escrito });
     } catch (e) {
         console.error("❌ Error al procesar caso CAJ:", e.message);
         res.status(500).json({ ok: false, error: e.message });
     }
 });
-const PORT = process.env.PORT || 3001;
-// ============================================================
-// CANAL WHATSAPP: RECEPTOR DE MENSAJES Y CONTENCIÓN HUMANA
-// ============================================================
 
-// 1. Verificación del Webhook (Requerido por Meta / WhatsApp Cloud API)
-app.get('/api/whatsapp/webhook', (req, res) => {
-    const modo = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const reto = req.query['hub.challenge'];
-
-    if (modo === 'subscribe' && token === (process.env.WHATSAPP_VERIFY_TOKEN || 'alucilex_token_secreto')) {
-        console.log("✅ Webhook de WhatsApp verificado con éxito.");
-        return res.status(200).send(reto);
-    }
-    res.sendStatus(403);
-});
-
-// 2. Recepción de mensajes reales desde WhatsApp
-app.post('/api/whatsapp/webhook', async (req, res) => {
-    try {
-        const body = req.body;
-        // Responder 200 OK de inmediato a WhatsApp para evitar reintentos
-        res.sendStatus(200);
-
-        const entrada = body.entry?.[0]?.changes?.[0]?.value;
-        const mensaje = entrada?.messages?.[0];
-
-        if (mensaje) {
-            const telefonoRemitente = mensaje.from;
-            let textoRelato = '';
-
-            // Si es mensaje de texto
-            if (mensaje.type === 'text') {
-                textoRelato = mensaje.text.body;
-            } 
-            // Si es nota de voz o audio
-            else if (mensaje.type === 'audio' || mensaje.type === 'voice') {
-                console.log("🎙️ Nota de voz recibida de WhatsApp. Descargando audio...");
-                // Aquí se descarga el archivo de audio usando el ID de multimedia de WhatsApp
-                // y se pasa por transcribirAudio()
-                textoRelato = "[Nota de voz recibida y transcrita]";
-            }
-
-            if (textoRelato) {
-                console.log(`📩 Mensaje recibido de ${telefonoRemitente}: "${textoRelato}"`);
-                
-                // Procesa con IA: extrae a Firebase y genera mensaje empático
-                const respuestaHumana = await procesarEntradaCiudadana(textoRelato, telefonoRemitente);
-                
-                console.log(`💬 Respuesta de contención enviada al ciudadano: "${respuestaHumana}"`);
-                // Aquí el servidor despacha 'respuestaHumana' de vuelta al chat del usuario
-            }
-        }
-    } catch (e) {
-        console.error("❌ Error en webhook de WhatsApp:", e.message);
-    }
-});
-
-// 3. Ruta de prueba rápida (Para probar la IA de contención sin Meta)
-app.post('/api/whatsapp/probar', async (req, res) => {
-    try {
-        const { mensaje, telefono } = req.body;
-        if (!mensaje) return res.status(400).json({ error: "Falta el mensaje de prueba" });
-
-        const respuestaContencion = await procesarEntradaCiudadana(mensaje, telefono || '+56912345678');
-        res.json({
-            ok: true,
-            mensaje_ciudadano_recibido: mensaje,
-            respuesta_contencion_enviada: respuestaContencion
-        });
-    } catch (e) {
-        res.status(500).json({ ok: false, error: e.message });
-    }
-});
-// Ruta universal para recibir y procesar adjuntos (acepta cualquier nombre de campo)
+// 4. Recepción de documentos adjuntos (PDFs o Imágenes)
 app.post('/api/caj/adjuntos/:id', upload.any(), async (req, res) => {
     try {
         const { id } = req.params;
-        // Obtiene el archivo subido sin importar el nombre del campo
         const archivo = req.file || (req.files && req.files[0]);
 
         if (!archivo) {
             return res.status(400).json({ ok: false, error: 'No se recibió ningún archivo' });
         }
 
-        console.log(`📎 Recibido archivo '${archivo.originalname}' (${archivo.mimetype}) para el caso ${id}`);
-
-        const { analizarDocumento, guardarDocumentoEnCaso } = require('./procesador_documentos');
-const infoDoc = await analizarDocumento(archivo.buffer, archivo.mimetype, archivo.originalname);
-const resultado = await guardarDocumentoEnCaso(id, infoDoc);
+        console.log(`📎 Recibido archivo '${archivo.originalname}' (${archivo.mimetype}) para expediente ${id}`);
+        const infoDoc = await analizarDocumento(archivo.buffer, archivo.mimetype, archivo.originalname);
+        const resultado = await guardarDocumentoEnCaso(id, infoDoc);
 
         res.json({ ok: true, resultado });
     } catch (error) {
@@ -582,111 +297,57 @@ const resultado = await guardarDocumentoEnCaso(id, infoDoc);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
-const path = require('path');
 
-// Permite servir archivos estáticos desde la raíz del proyecto
-app.use(express.static(__dirname));
-
-// Ruta directa para acceder al panel CAJ
-app.get('/caj', (req, res) => {
-    res.sendFile(path.join(__dirname, 'caj_dashboard.html'));
-});
-// 1. Eliminar un adjunto de un caso
+// 5. Eliminar adjunto de un caso
 app.delete('/api/caj/casos/:id/adjuntos/:index', async (req, res) => {
     try {
         const { id, index } = req.params;
         const idx = parseInt(index, 10);
-        const { db } = require('./firebase_caj');
         
-        const docRef = db.collection('casos_caj').doc(id);
+        const docRef = dbFirestore.collection('casos_caj').doc(id);
         const docSnap = await docRef.get();
         if (!docSnap.exists) {
-            return res.status(404).json({ ok: false, error: 'Caso no encontrado' });
+            return res.status(404).json({ ok: false, error: 'Expediente no encontrado' });
         }
 
         const data = docSnap.data();
         let adjuntos = data.documentos_probatorios || [];
 
         if (idx >= 0 && idx < adjuntos.length) {
-            const eliminado = adjuntos.splice(idx, 1);
+            adjuntos.splice(idx, 1);
             await docRef.update({ documentos_probatorios: adjuntos });
-            console.log(`🗑️ Adjunto eliminado del caso ${id}:`, eliminado[0]?.nombreArchivo);
-            return res.json({ ok: true, mensaje: 'Documento eliminado exitosamente', documentos_probatorios: adjuntos });
+            return res.json({ ok: true, mensaje: 'Documento eliminado', documentos_probatorios: adjuntos });
         } else {
             return res.status(400).json({ ok: false, error: 'Índice de documento no válido' });
         }
     } catch (error) {
-        console.error('Error al eliminar adjunto:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
 
-// 2. Eliminar una causa completa de la Base de Datos
+// 6. Eliminar expediente completo
 app.delete('/api/caj/casos/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { db } = require('./firebase_caj');
-        
-        const docRef = db.collection('casos_caj').doc(id);
-        const docSnap = await docRef.get();
-        if (!docSnap.exists) {
-            return res.status(404).json({ ok: false, error: 'Causa no encontrada' });
-        }
-
-        await docRef.delete();
-        console.log(`🗑️ Causa ${id} eliminada permanentemente de la Base de Datos.`);
-        res.json({ ok: true, mensaje: 'Causa eliminada exitosamente' });
+        await dbFirestore.collection('casos_caj').doc(id).delete();
+        res.json({ ok: true, mensaje: 'Expediente eliminado exitosamente' });
     } catch (error) {
-        console.error('Error al eliminar causa:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
-// 2. Modificar / Actualizar cualquier dato o materia de un caso (sin grabar nada en piedra)
+
+// 7. Modificar expediente
 app.put('/api/caj/casos/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const actualizacion = req.body;
-        const { db } = require('./firebase_caj');
-        
-        const docRef = db.collection('casos_caj').doc(id);
-        await docRef.update({
-            ...actualizacion,
-            actualizadoEn: new Date()
-        });
-        
-        console.log(`✏️ Caso ${id} actualizado/reclasificado exitosamente.`);
-        res.json({ ok: true, mensaje: 'Causa actualizada correctamente' });
+        await actualizarCaso(id, req.body);
+        res.json({ ok: true, mensaje: 'Expediente actualizado correctamente' });
     } catch (error) {
-        console.error('Error al actualizar caso:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
-// Ruta para registrar una nueva causa en la Base de Datos
-app.post('/api/caj/nuevo', async (req, res) => {
-    try {
-        const { db } = require('./firebase_caj');
-        const nuevaCausa = req.body;
-        
-        const docRef = await db.collection('casos_caj').add({
-            ...nuevaCausa,
-            documentos_probatorios: [],
-            creadoEn: new Date()
-        });
-        
-        console.log(`✅ Nueva causa creada en Base de Datos con ID: ${docRef.id}`);
-        res.json({ ok: true, id: docRef.id });
-    } catch (error) {
-        console.error('Error al crear causa:', error);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-// ==========================================
-// RUTAS DE POSTULANTES / ASISTENTES JURÍDICOS
-// ==========================================
 
-const { guardarPostulante, listarPostulantes, buscarPostulantePorTelefono } = require('./firebase_caj');
-
-// Listar todos los postulantes
+// 8. Rutas de nómina y postulantes
 app.get('/api/caj/postulantes', async (req, res) => {
     try {
         const postulantes = await listarPostulantes();
@@ -696,7 +357,6 @@ app.get('/api/caj/postulantes', async (req, res) => {
     }
 });
 
-// Registrar un nuevo postulante
 app.post('/api/caj/postulantes', async (req, res) => {
     try {
         const nuevo = await guardarPostulante(req.body);
@@ -705,131 +365,44 @@ app.post('/api/caj/postulantes', async (req, res) => {
         res.status(500).json({ ok: false, error: error.message });
     }
 });
-// ==========================================
-// RECEPCIÓN DE WHATSAPP CON CONTROL DE ETIQUETAS
-// ==========================================
 
-const { procesarMensajeWhatsApp } = require('./whatsapp_caj');
-
-app.post('/api/caj/whatsapp/mensaje', async (req, res) => {
-    try {
-        const { texto, telefonoRemitente, telefonoPostulante, etiquetas } = req.body;
-
-        if (!texto || !telefonoRemitente) {
-            return res.status(400).json({ ok: false, error: 'Faltan parámetros requeridos (texto, telefonoRemitente)' });
-        }
-
-        const resultado = await procesarMensajeWhatsApp(
-            texto,
-            telefonoRemitente,
-            telefonoPostulante,
-            etiquetas || []
-        );
-
-        res.json({ ok: true, resultado });
-    } catch (error) {
-        console.error("Error al procesar mensaje de WhatsApp:", error);
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-// Ruta de acceso al Despacho Jurídico CAJ
+// 9. Login al Despacho Jurídico CAJ
 app.post('/api/caj/auth/login', async (req, res) => {
     try {
         const { identificador, pin } = req.body;
         if (!identificador) {
             return res.status(400).json({ ok: false, error: 'Debe ingresar su número de WhatsApp o RUT.' });
         }
-        const { validarAccesoPostulante } = require('./firebase_caj');
         const resultado = await validarAccesoPostulante(identificador, pin);
         res.json(resultado);
     } catch (error) {
         res.status(500).json({ ok: false, error: error.message });
     }
 });
-// ==========================================
-// CONEXIÓN EN VIVO DE WHATSAPP (QR + ETIQUETAS)
-// ==========================================
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode-terminal');
 
+// ============================================================
+// CANAL WHATSAPP: RECEPCIÓN 24/7 EN LA NUBE Y LOCAL
+// ============================================================
 
-const clientWA = new Client({
-    authStrategy: new LocalAuth(),
-    puppeteer: {
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    }
-});
-
-clientWA.on('qr', (qr) => {
-    console.log('\n📲 ESCANEA ESTE CÓDIGO QR CON WHATSAPP BUSINESS EN TU CELULAR:\n');
-    qrcode.generate(qr, { small: true });
-});
-
-clientWA.on('ready', () => {
-    console.log('✅ Cliente de WhatsApp conectado y listo para atención CAJ.');
-});
-
-clientWA.on('message', async (msg) => {
-    try {
-        const chat = await msg.getChat();
-        
-        // Obtener las etiquetas del chat en WhatsApp Business
-        const etiquetasRaw = await chat.getLabels();
-        const nombresEtiquetas = (etiquetasRaw || []).map(l => l.name);
-
-        const telefonoRemitente = msg.from.replace('@c.us', '');
-        const telefonoPostulante = '+56957948583'; // Tu número de abogado/coordinador
-
-        // Procesar mediante el motor de acogida y contención
-        const resultado = await procesarMensajeWhatsApp(
-            msg.body,
-            telefonoRemitente,
-            telefonoPostulante,
-            nombresEtiquetas
-        );
-
-        // Si la IA autorizó responder (chat con etiqueta "CAJ - Recepción IA")
-        if (resultado.responder && resultado.respuestaTexto) {
-            await msg.reply(resultado.respuestaTexto);
-            console.log(`💬 Respuesta de contención enviada a ${telefonoRemitente}`);
-        }
-    } catch (err) {
-        console.error('Error al procesar mensaje entrante de WhatsApp:', err);
-    }
-});
-
-clientWA.initialize();
-// ==========================================
-// WEBHOOK OFICIAL DE WHATSAPP EN LA NUBE (RENDER)
-// ==========================================
-
-
-
-// Verificación inicial del webhook (para Meta / WhatsApp Cloud API o servicios de mensajería)
+// Webhook oficial de WhatsApp en la nube (Render)
 app.get('/api/caj/whatsapp/webhook', (req, res) => {
     const modo = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
     const reto = req.query['hub.challenge'];
 
     if (modo === 'subscribe' && token === 'alucilex_caj_token_seguro') {
-        console.log('✅ Webhook de WhatsApp verificado con éxito en la nube.');
         return res.status(200).send(reto);
     }
-    res.status(200).json({ ok: true, mensaje: 'Endpoint Webhook CAJ activo en Render' });
+    res.status(200).json({ ok: true, mensaje: 'Webhook CAJ activo en Render' });
 });
 
-// Recepción de mensajes entrantes desde la nube
 app.post('/api/caj/whatsapp/webhook', async (req, res) => {
     try {
         const body = req.body;
-        console.log('📲 Notificación de WhatsApp recibida en la nube:', JSON.stringify(body).slice(0, 200));
-
-        // Mapeo flexible para proveedores de WhatsApp (Cloud API, Twilio o gateways)
         let texto = body.texto || body.message || body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
         let telefonoRemitente = body.telefonoRemitente || body.from || body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
-        let etiquetas = body.etiquetas || body.labels || ['CAJ - Recepción IA']; // Por defecto o provisto por webhook
-        let telefonoPostulante = body.telefonoPostulante || '+56957948583'; // Carlos Rosas
+        let etiquetas = body.etiquetas || body.labels || ['CAJ - Recepción IA'];
+        let telefonoPostulante = body.telefonoPostulante || '+56957948583';
 
         if (texto && telefonoRemitente) {
             const resultado = await procesarMensajeWhatsApp(
@@ -838,14 +411,54 @@ app.post('/api/caj/whatsapp/webhook', async (req, res) => {
                 telefonoPostulante,
                 etiquetas
             );
-
             return res.json({ ok: true, resultado });
         }
-
-        res.json({ ok: true, mensaje: 'Evento recibido' });
+        res.json({ ok: true, mensaje: 'Evento procesado' });
     } catch (error) {
-        console.error('Error en webhook de WhatsApp:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
+
+// Endpoint de prueba directa o simulación
+app.post('/api/caj/whatsapp/mensaje', async (req, res) => {
+    try {
+        const { texto, telefonoRemitente, telefonoPostulante, etiquetas } = req.body;
+        if (!texto || !telefonoRemitente) {
+            return res.status(400).json({ ok: false, error: 'Faltan parámetros requeridos (texto, telefonoRemitente)' });
+        }
+        const resultado = await procesarMensajeWhatsApp(
+            texto,
+            telefonoRemitente,
+            telefonoPostulante || '+56957948583',
+            etiquetas || []
+        );
+        res.json({ ok: true, resultado });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Enlace directo de conveniencia a la interfaz
+app.get('/caj', (req, res) => {
+    res.sendFile(path.join(__dirname, 'caj_dashboard.html'));
+});
+
+// Conector opcional para escaneo QR local (protegido para evitar caídas en la nube)
+if (!process.env.RENDER) {
+    try {
+        const { Client, LocalAuth } = require('whatsapp-web.js');
+        const qrcode = require('qrcode-terminal');
+        const clientWA = new Client({
+            authStrategy: new LocalAuth(),
+            puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] }
+        });
+        clientWA.on('qr', (qr) => qrcode.generate(qr, { small: true }));
+        clientWA.on('ready', () => console.log('✅ WhatsApp QR local conectado.'));
+        clientWA.initialize().catch(() => {});
+    } catch (e) {
+        // En Render o si falta puppeteer se opera exclusivamente por Webhook
+    }
+}
+
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`));
