@@ -7,13 +7,24 @@ const fs = require('fs');
 
 let credencialFirebase = null;
 
-// 1. Prioridad: Secret File de Render en la nube
-if (fs.existsSync('/etc/secrets/serviceAccountKey.json')) {
+// 1. Prioridad Máxima: Variable de entorno en la nube de Render
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+        console.log("🔑 Usando variable de entorno FIREBASE_SERVICE_ACCOUNT");
+        credencialFirebase = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    } catch (e) {
+        console.error("Error al parsear FIREBASE_SERVICE_ACCOUNT:", e);
+    }
+}
+
+// 2. Secret File en /etc/secrets
+if (!credencialFirebase && fs.existsSync('/etc/secrets/serviceAccountKey.json')) {
     console.log("🔑 Usando Secret File de Render (/etc/secrets/serviceAccountKey.json)");
     credencialFirebase = require('/etc/secrets/serviceAccountKey.json');
-} 
-// 2. Archivo local de desarrollo en tu computador
-else {
+}
+
+// 3. Archivo local de desarrollo en tu computador
+if (!credencialFirebase) {
     const localPath = path.resolve(__dirname, 'serviceAccountKey.json');
     if (fs.existsSync(localPath)) {
         console.log("🔑 Usando archivo local serviceAccountKey.json");
