@@ -172,13 +172,33 @@ async function buscarPostulantePorTelefono(telefono) {
         return null;
     }
 }
-
+/**
+ * Guarda el dictamen jurídico y el escrito forense en el expediente
+ */
+async function actualizarDictamenYEscrito(id, informe, escrito) {
+    try {
+        await coleccionCasos.doc(id).update({
+            informe_juridico: informe,
+            escrito_judicial: escrito,
+            analisis_juridico: informe,
+            escrito_borrador: escrito,
+            estado: 'escrito_listo',
+            fecha_actualizacion: new Date(),
+            actualizadoEn: new Date()
+        });
+        return { ok: true };
+    } catch (error) {
+        console.error("Error al actualizar dictamen y escrito:", error);
+        throw error;
+    }
+}
 module.exports = {
     db,
     guardarCaso,
     obtenerCaso,
     listarCasos,
     actualizarCaso,
+    actualizarDictamenYEscrito,
     guardarPostulante,
     listarPostulantes,
     buscarPostulantePorTelefono
