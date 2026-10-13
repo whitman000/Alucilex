@@ -804,7 +804,7 @@ clientWA.initialize();
 // WEBHOOK OFICIAL DE WHATSAPP EN LA NUBE (RENDER)
 // ==========================================
 
-const { procesarMensajeWhatsApp } = require('./whatsapp_caj');
+
 
 // Verificación inicial del webhook (para Meta / WhatsApp Cloud API o servicios de mensajería)
 app.get('/api/caj/whatsapp/webhook', (req, res) => {
