@@ -746,4 +746,106 @@ app.post('/api/caj/auth/login', async (req, res) => {
         res.status(500).json({ ok: false, error: error.message });
     }
 });
+// ==========================================
+// CONEXIÓN EN VIVO DE WHATSAPP (QR + ETIQUETAS)
+// ==========================================
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode-terminal');
+const { procesarMensajeWhatsApp } = require('./whatsapp_caj');
+
+const clientWA = new Client({
+    authStrategy: new LocalAuth(),
+    puppeteer: {
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    }
+});
+
+clientWA.on('qr', (qr) => {
+    console.log('\n📲 ESCANEA ESTE CÓDIGO QR CON WHATSAPP BUSINESS EN TU CELULAR:\n');
+    qrcode.generate(qr, { small: true });
+});
+
+clientWA.on('ready', () => {
+    console.log('✅ Cliente de WhatsApp conectado y listo para atención CAJ.');
+});
+
+clientWA.on('message', async (msg) => {
+    try {
+        const chat = await msg.getChat();
+        
+        // Obtener las etiquetas del chat en WhatsApp Business
+        const etiquetasRaw = await chat.getLabels();
+        const nombresEtiquetas = (etiquetasRaw || []).map(l => l.name);
+
+        const telefonoRemitente = msg.from.replace('@c.us', '');
+        const telefonoPostulante = '+56957948583'; // Tu número de abogado/coordinador
+
+        // Procesar mediante el motor de acogida y contención
+        const resultado = await procesarMensajeWhatsApp(
+            msg.body,
+            telefonoRemitente,
+            telefonoPostulante,
+            nombresEtiquetas
+        );
+
+        // Si la IA autorizó responder (chat con etiqueta "CAJ - Recepción IA")
+        if (resultado.responder && resultado.respuestaTexto) {
+            await msg.reply(resultado.respuestaTexto);
+            console.log(`💬 Respuesta de contención enviada a ${telefonoRemitente}`);
+        }
+    } catch (err) {
+        console.error('Error al procesar mensaje entrante de WhatsApp:', err);
+    }
+});
+
+clientWA.initialize();
+// ==========================================
+// WEBHOOK OFICIAL DE WHATSAPP EN LA NUBE (RENDER)
+// ==========================================
+
+const { procesarMensajeWhatsApp } = require('./whatsapp_caj');
+
+// Verificación inicial del webhook (para Meta / WhatsApp Cloud API o servicios de mensajería)
+app.get('/api/caj/whatsapp/webhook', (req, res) => {
+    const modo = req.query['hub.mode'];
+    const token = req.query['hub.verify_token'];
+    const reto = req.query['hub.challenge'];
+
+    if (modo === 'subscribe' && token === 'alucilex_caj_token_seguro') {
+        console.log('✅ Webhook de WhatsApp verificado con éxito en la nube.');
+        return res.status(200).send(reto);
+    }
+    res.status(200).json({ ok: true, mensaje: 'Endpoint Webhook CAJ activo en Render' });
+});
+
+// Recepción de mensajes entrantes desde la nube
+app.post('/api/caj/whatsapp/webhook', async (req, res) => {
+    try {
+        const body = req.body;
+        console.log('📲 Notificación de WhatsApp recibida en la nube:', JSON.stringify(body).slice(0, 200));
+
+        // Mapeo flexible para proveedores de WhatsApp (Cloud API, Twilio o gateways)
+        let texto = body.texto || body.message || body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
+        let telefonoRemitente = body.telefonoRemitente || body.from || body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
+        let etiquetas = body.etiquetas || body.labels || ['CAJ - Recepción IA']; // Por defecto o provisto por webhook
+        let telefonoPostulante = body.telefonoPostulante || '+56957948583'; // Carlos Rosas
+
+        if (texto && telefonoRemitente) {
+            const resultado = await procesarMensajeWhatsApp(
+                texto,
+                telefonoRemitente,
+                telefonoPostulante,
+                etiquetas
+            );
+
+            return res.json({ ok: true, resultado });
+        }
+
+        res.json({ ok: true, mensaje: 'Evento recibido' });
+    } catch (error) {
+        console.error('Error en webhook de WhatsApp:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
 app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`));
