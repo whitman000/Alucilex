@@ -732,4 +732,18 @@ app.post('/api/caj/whatsapp/mensaje', async (req, res) => {
         res.status(500).json({ ok: false, error: error.message });
     }
 });
+// Ruta de acceso al Despacho Jurídico CAJ
+app.post('/api/caj/auth/login', async (req, res) => {
+    try {
+        const { identificador, pin } = req.body;
+        if (!identificador) {
+            return res.status(400).json({ ok: false, error: 'Debe ingresar su número de WhatsApp o RUT.' });
+        }
+        const { validarAccesoPostulante } = require('./firebase_caj');
+        const resultado = await validarAccesoPostulante(identificador, pin);
+        res.json(resultado);
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
 app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`));

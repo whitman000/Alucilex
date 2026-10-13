@@ -238,6 +238,54 @@ async function buscarPostulantePorTelefono(telefono) {
         return null;
     }
 }
+/**
+ * Valida el acceso de un colega por WhatsApp o RUT
+ */
+async function validarAccesoPostulante(identificador, pin = null) {
+    try {
+        const idLimpio = (identificador || '').replace(/\s+/g, '');
+        const rutNorm = normalizarRUT(idLimpio);
+
+        // 1. Buscar por número de teléfono de WhatsApp
+        let snapshot = await coleccionPostulantes.where('telefono', '==', idLimpio).get();
+        
+        // 2. Si no encuentra por teléfono, buscar por RUT
+        if (snapshot.empty && rutNorm) {
+            snapshot = await coleccionPostulantes.where('rut', '==', rutNorm).get();
+        }
+
+        if (snapshot.empty) {
+            return { ok: false, error: 'El identificador ingresado no figura registrado en la nómina del Centro CAJ.' };
+        }
+
+        const doc = snapshot.docs[0];
+        const data = doc.data();
+
+        if (data.activo === false) {
+            return { ok: false, error: 'Su habilitación para este despacho se encuentra inactiva. Consulte con coordinación.' };
+        }
+
+        if (data.pin && pin && String(data.pin) !== String(pin)) {
+            return { ok: false, error: 'Código de seguridad incorrecto.' };
+        }
+
+        return {
+            ok: true,
+            usuario: {
+                id: doc.id,
+                nombre: data.nombre,
+                telefono: data.telefono,
+                rut: data.rut || rutNorm || '',
+                rol: data.rol || (data.nombre.toLowerCase().includes('carlos rosas') ? 'coordinador' : 'postulante'),
+                centro_caj: data.centro_caj || 'CAJ Puente Alto',
+                materia_asignada: data.materia_asignada || 'General'
+            }
+        };
+    } catch (error) {
+        console.error("Error al validar acceso:", error);
+        throw error;
+    }
+}
 
 module.exports = {
     db,
@@ -249,5 +297,6 @@ module.exports = {
     actualizarDictamenYEscrito,
     guardarPostulante,
     listarPostulantes,
-    buscarPostulantePorTelefono
+    buscarPostulantePorTelefono,
+    validarAccesoPostulante
 };
