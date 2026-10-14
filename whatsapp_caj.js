@@ -1,7 +1,7 @@
 
 async function enviarRespuestaWhatsApp(telefonoDestino, texto) {
     const phoneId = process.env.WHATSAPP_PHONE_ID || '1333646283173512';
-    const token = process.env.WHATSAPP_TOKEN || 'EAAaEAiblWC8BSlHlD6kJkLmZB2KwwrkA6iK0oPZCilifINtlLOeDnUYACPxWZBZBaXP6nBHdOegSDb0hvIn9d2VCtZAmAEZA3XG1opq2wdobNIEj4HM8AZAL5uwxZCIMFuqXvTPW29FK2ZB0kbscer1G3XqYQxsjCiRl2VHTwu66zqOWetfjgMTRPmrXwe97axIPWq5jRXBzyEdkrlHrkvKQ9NngfdbvCYwRYZCsq9J9DqoKncOHhbrh5n87ogoEFzlqAqn4FXFJKVZCccZCgQnJlTCPfgZDZD';
+    const token = process.env.WHATSAPP_TOKEN || 'EAAaEAiblWC8BShLjZCZC2HWtZCe6jfyHG0fAnAlrpG8CGrwcojEdkLrz0fxUtIxrSKA7U6fI0F08zk5zIZCrBpsQZAFxY91WMQOsmNg1FzvF06ZA2HHZAlqHZAdtWgyAZBchdPVuuBQBTd2kZBlimTZAh4N9G8LnhZCwqMxbxN3urq73nWABflQSzWJCH5fQAadTegYt5wZDZD';
     if (!token) {
         console.warn('⚠️ No hay WHATSAPP_TOKEN configurado.');
         return null;
