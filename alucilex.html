@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alucilex AI - Consultor Jurídico</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* ========== ESTILOS ORIGINALES COMPLETOS ========== */
+        body { font-family: 'Inter', sans-serif; background: #f4f7f6; margin: 0; display: flex; flex-direction: column; height: 100vh; user-select: none; -webkit-user-select: none; color: #333; }
+        body.admin-mode { user-select: auto; -webkit-user-select: auto; }
+
+        .header { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #FFCE00; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .header-title { font-size: 22px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        
+        .btn-imprimir-top { background: #FFCE00; color: #1e3c72; border: none; padding: 10px 18px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 14px; transition: all 0.3s ease; display: flex; align-items: center; gap: 5px; box-shadow: 0 2px 5px rgba(255, 206, 0, 0.4);}
+        .btn-imprimir-top:hover { background: #ffd633; transform: translateY(-2px); }
+
+        #chat-box { flex: 1; overflow-y: auto; padding: 30px; display: flex; flex-direction: column; gap: 20px; max-width: 900px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+        .msg { max-width: 85%; padding: 20px; border-radius: 16px; line-height: 1.6; font-size: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .ai { background: white; align-self: flex-start; border-left: 6px solid #2a5298; color: #2c3e50; border-bottom-left-radius: 4px; }
+        .user { background: #e0f2fe; align-self: flex-end; color: #0369a1; font-weight: 500; border-right: 6px solid #0369a1; border-bottom-right-radius: 4px; }
+        
+        .ai h1, .ai h2, .ai h3 { color: #1e3c72; margin-top: 0; font-size: 1.15em; border-bottom: 1px solid #eee; padding-bottom: 5px;}
+        .ai strong { color: #111; }
+        .ai ul, .ai ol { padding-left: 20px; }
+        .ai table { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }
+        .ai th, .ai td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .ai th { background-color: #f8f9fa; color: #1e3c72; }
+
+        .input-area { background: white; padding: 20px; border-top: 1px solid #eaeaea; box-shadow: 0 -4px 12px rgba(0,0,0,0.03); }
+        .container { max-width: 900px; margin: 0 auto; display: flex; gap: 12px; }
+        input { flex: 1; padding: 16px; border: 2px solid #e2e8f0; border-radius: 10px; font-size: 15px; outline: none; transition: border-color 0.3s; font-family: 'Inter', sans-serif;}
+        input:focus { border-color: #2a5298; }
+        button#btn-enviar { background: #ea580c; color: white; border: none; padding: 0 35px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 15px; transition: background 0.3s; }
+        button#btn-enviar:hover { background: #c2410c; }
+        button#btn-enviar:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+        .footer { text-align: center; padding: 10px; font-size: 12px; color: #64748b; background: white; }
+        .footer a { color: #2a5298; text-decoration: none; font-weight: 600; }
+
+        .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.85); justify-content:center; align-items:center; z-index: 1000; backdrop-filter: blur(4px);}
+        .modal-content { background: white; padding: 35px; border-radius: 20px; text-align: center; max-width: 480px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative; border-top: 6px solid #FFCE00;}
+        
+        .modal-destacado { background: #fffbeb; border: 1px solid #fef3c7; color: #b45309; padding: 15px; border-radius: 10px; margin: 20px 0; font-size: 14px; line-height: 1.5; font-weight: 500;}
+        .modal-destacado strong { color: #92400e; font-size: 16px;}
+        
+        .flow-btn { background: #000000; color: white; padding: 16px 30px; border-radius: 10px; text-decoration: none; display: flex; justify-content: center; align-items: center; gap: 10px; margin: 15px 0; font-weight: 700; font-size: 16px; transition: all 0.3s; border: 2px solid #000;}
+        .flow-btn:hover { background: white; color: #000; }
+        
+        .btn-grupo { display: flex; flex-direction: column; gap: 10px; margin-top: 25px; }
+        .btn-secundario { background: transparent; color: #64748b; border: none; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 500; font-size: 14px;}
+        .btn-secundario:hover { color: #334155; background: #f1f5f9; }
+        
+        #btn-ejecutar-impresion { background: #22c55e; color: white; border: none; padding: 15px; border-radius: 10px; font-weight: 700; cursor: pointer; font-size: 16px; display: none; transition: background 0.3s;}
+        #btn-ejecutar-impresion:hover { background: #16a34a; }
+
+        @media print {
+            body { background: white; }
+            .header, .input-area, .footer, .modal-overlay, .btn-imprimir-top { display: none !important; }
+            #chat-box { overflow: visible !important; height: auto !important; width: 100%; max-width: 100%; padding: 0; display: block;}
+            .msg { max-width: 100%; box-shadow: none; padding: 10px 0; page-break-inside: avoid; }
+            .ai { border-left: none; color: black; }
+            .user { font-style: italic; background: none; border-right: none; text-align: right; color: #555;}
+        }
+
+        /* Estilos del modal quiz */
+        #quiz-modal .modal-content {
+            max-width: 700px;
+            width: 90%;
+            text-align: left;
+            padding: 30px;
+            max-height: 80vh;
+            overflow-y: auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            border-top: 6px solid #FFCE00;
+        }
+        
+        .cargando-spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(0,0,0,0.1); border-radius: 50%; border-top-color: #2a5298; animation: spin 1s ease-in-out infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-title">⚖️ AlucileX <span style="font-weight: 400; font-size: 16px;">| D° Civil</span></div>
+        <div style="display: flex; gap: 10px;">
+            <a href="escrituras.html" class="btn-imprimir-top" style="text-decoration: none; background: #e2e8f0; color: #1e3c72;">📜 Escrituras Públicas</a>
+            <button class="btn-imprimir-top" onclick="prepararImpresion()">🖨️ Imprimir Consulta</button>
+        </div>
+    </div>
+    
+    <div id="chat-box">
+        <div class="msg ai">Hola. ¿Qué artículo o tema deseas conocer del Derecho Civil chileno?</div>
+    </div>
+    
+    <div class="input-area">
+        <div class="container">
+            <input type="text" id="pregunta-input" placeholder="Escribe tu consulta legal aquí..." onkeypress="if(event.key==='Enter')enviar()">
+            <button id="btn-enviar" onclick="enviar()">CONSULTAR</button>
+        </div>
+    </div>
+
+    <div class="footer">
+        © 2026 Alucilex - Para soporte y consultas: <a href="mailto:contacto@alucilet.cl">contacto@alucinet.cl</a>
+    </div>
+
+    <div class="modal-overlay" id="donacion-modal">
+        <div class="modal-content">
+            <h2 style="color: #1e3c72; margin-top: 0; font-size: 24px;">🖨️ Desbloquear Impresión</h2>
+            <div class="modal-destacado">
+                Mantener este motor de inteligencia jurídica requiere recursos constantes.<br><br>
+                Para habilitar la impresión de tu documento, requerimos un aporte mínimo de <strong>$1.500 CLP</strong>. Esto nos ayuda directamente a cubrir gastos de mantención de servidores y costos fijos de la plataforma.
+            </div>
+            <a href="https://www.flow.cl/btn.php?token=p5a579118c9e7a9ee206e42ff57cfca384185a9e" target="_blank" class="flow-btn" onclick="habilitarImpresion()">💳 Pagar $1.500 con Flow</a>
+            <div class="btn-grupo">
+                <button id="btn-ejecutar-impresion" onclick="ejecutarImpresion()">✅ Ya realicé el pago (Imprimir ahora)</button>
+                <button class="btn-secundario" onclick="cerrarModal()">Cancelar y volver al chat</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="quiz-modal" style="display: none; align-items: flex-start; padding-top: 5vh;">
+        <div class="modal-content">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 id="quiz-titulo" style="margin:0; color: #1e3c72;">🧠 Análisis de Artículos C.C.</h2>
+                <button onclick="cerrarQuiz()" style="background: none; border: none; font-size: 28px; cursor: pointer; color: #999;">&times;</button>
+            </div>
+            
+            <div id="quiz-cuerpo">
+                <!-- SECCIÓN 1: COMPRENSIÓN Artículos C.C -->
+                <div style="background: #f8fafc; padding: 15px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #FFCE00;">
+                    <p style="font-weight: bold; margin:0 0 8px;">📜 <span id="quiz-titulo-contexto">Preparando...</span></p>
+                    <p id="quiz-articulo" style="font-style: italic; color: #333; margin: 0;"></p>
+                </div>
+
+                <!-- SEPARADOR VISUAL Y ADVERTENCIA -->
+                <hr style="border: 0; height: 2px; background: linear-gradient(to right, transparent, #cbd5e1, transparent); margin: 25px 0;">
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <span style="background: #1e3a8a; color: white; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: bold; letter-spacing: 1px; text-transform: uppercase; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                        ⚖️ Zona de Medición de Conocimientos
+                    </span>
+                    <p style="font-size: 13.5px; color: #475569; margin-top: 12px; font-style: italic;">
+                        Comprensión y análisis de artículos. A continuación, pon a prueba tu dominio respondiendo el siguiente desafío.
+                    </p>
+                </div>
+                <!-- FIN SEPARADOR -->
+                <p id="quiz-pregunta" style="font-weight: 700; font-size: 16px; margin-bottom: 15px; color: #1e3c72;"></p>
+                <div id="quiz-opciones" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;"></div>
+                <div id="quiz-feedback" style="display: none; border-radius: 10px; padding: 15px; margin-bottom: 20px;">
+                    <p id="quiz-resultado" style="font-weight: bold; margin:0 0 10px;"></p>
+                    <p id="quiz-explicacion" style="font-size: 14px; margin:0 0 10px; color: #333;"></p>
+                    <div id="compartir-botones" style="display: none; margin-top: 10px;">
+                        <button id="btn-compartir" style="background: #25D366; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; font-weight: 600;">📱 Compartir logro</button>
+                    </div>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="font-size: 13px; color: #64748b; font-weight: bold;">Modo Práctica Aleatoria</span>
+                    <button id="btn-siguiente" onclick="cargarPreguntaAleatoria()" style="background: #ea580c; color: white; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; display: none;">Siguiente Caso ▶</button>
+                </div>
+            </div>
+            
+            <div id="aviso-respuesta-lista" style="display: none; margin-top: 20px; background: #e0f2fe; padding: 15px; border-radius: 10px; text-align: center;">
+                <p style="margin:0; font-weight: bold; color: #0369a1;">✅ Tu respuesta principal está lista. Cierra el quiz para verla.</p>
+                <button onclick="cerrarQuiz()" style="margin-top: 10px; background: #2a5298; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: bold;">Cerrar Quiz y ver respuesta</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+// ================= PROTECCIÓN ANTI-COPIA =================
+        document.addEventListener('contextmenu', event => {
+            if(!document.body.classList.contains('admin-mode')) event.preventDefault();
+        });
+        document.addEventListener('keydown', event => {
+            if(!document.body.classList.contains('admin-mode')) {
+                if ((event.ctrlKey || event.metaKey) && (event.key === 'c' || event.key === 'C' || event.key === 'p' || event.key === 'P')) {
+                    event.preventDefault();
+                    if(event.key === 'p' || event.key === 'P') {
+                        prepararImpresion();
+                    } else {
+                        alert("⚠️ La copia de este material está protegida. Usa el botón superior para Imprimir.");
+                    }
+                }
+            }
+        });
+        document.addEventListener('keydown', event => {
+            if(event.ctrlKey && event.shiftKey && (event.key === 'x' || event.key === 'X')) {
+                document.body.classList.toggle('admin-mode');
+                if(document.body.classList.contains('admin-mode')){
+                    alert("🔓 MODO ADMINISTRADOR: Copia y clic derecho HABILITADOS.");
+                } else {
+                    alert("🔒 MODO ADMINISTRADOR: Copia y clic derecho DESHABILITADOS.");
+                }
+            }
+        });
+
+        // ================= IMPRESIÓN =================
+        function prepararImpresion() {
+            document.getElementById('donacion-modal').style.display = 'flex';
+            const btnImprimir = document.getElementById('btn-ejecutar-impresion');
+            btnImprimir.style.display = 'none';
+            btnImprimir.disabled = false;
+            btnImprimir.style.background = "#2a5298";
+            btnImprimir.innerText = "✅ Imprimir ahora";
+        }
+        function habilitarImpresion() {
+            const btn = document.getElementById('btn-ejecutar-impresion');
+            btn.style.display = 'block';
+            btn.disabled = true;
+            btn.style.background = "#94a3b8"; 
+            btn.style.cursor = "not-allowed";
+            let tiempo = 45;
+            btn.innerText = `⏳ Verificando transacción con Flow... (${tiempo}s)`;
+            const intervalo = setInterval(() => {
+                tiempo--;
+                btn.innerText = `⏳ Verificando transacción con Flow... (${tiempo}s)`;
+                if (tiempo <= 0) {
+                    clearInterval(intervalo);
+                    btn.disabled = false;
+                    btn.style.background = "#22c55e"; 
+                    btn.style.cursor = "pointer";
+                    btn.innerText = "✅ Pago verificado (Imprimir ahora)";
+                }
+            }, 1000);
+        }
+        function ejecutarImpresion() {
+            document.getElementById('donacion-modal').style.display = 'none';
+            window.print();
+        }
+        function cerrarModal() {
+            document.getElementById('donacion-modal').style.display = 'none';
+        }
+
+        // ================= CHAT + QUIZ =================
+        let sessionId = localStorage.getItem('alucilex_session');
+        if (!sessionId) {
+            sessionId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
+            localStorage.setItem('alucilex_session', sessionId);
+        }
+        let esperandoConfirmacion = false;
+        let respuestaChatAcumulada = '';
+        let quizActivo = false;
+        let respuestaUsuarioDada = false;
+        let preguntaServidorData = null;
+        
+        // 🌟 NUEVO: Usamos una variable en memoria estricta para la caja del chat actual (evita clonación de IDs)
+        let divMensajeActual = null; 
+
+        async function enviar() {
+            const box = document.getElementById('chat-box');
+            const input = document.getElementById('pregunta-input');
+            const btn = document.getElementById('btn-enviar');
+            const texto = input.value.trim();
+            
+            if(!texto || esperandoConfirmacion || quizActivo) return;
+
+            // 1. Iniciar el Quiz y preparar la interfaz
+            abrirQuiz();
+
+            box.insertAdjacentHTML('beforeend', `<div class="msg user">${texto}</div>`);
+            input.value = ''; 
+            input.disabled = true;
+            btn.disabled = true;
+
+            // 2. Crear la burbuja de la IA que se irá llenando (Efecto Máquina de Escribir)
+            const aiDiv = document.createElement('div');
+            aiDiv.className = 'msg ai';
+            aiDiv.innerHTML = '<em>Alucilex está analizando tu consulta...</em>';
+            box.appendChild(aiDiv);
+            box.scrollTop = box.scrollHeight;
+
+            let textoAcumuladoLocal = '';
+
+            try {
+                const res = await fetch('https://alucilex.onrender.com/api/consultar', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ pregunta: texto, sessionId: sessionId })
+                });
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if(done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    lines.forEach(line => {
+                        if(line.startsWith('data: ')) {
+                            const dataRaw = line.replace('data: ', '').trim();
+                            
+                            if(dataRaw === '[DONE]') {
+                                // Finalización del proceso
+                                if (quizActivo) {
+                                    document.getElementById('aviso-respuesta-lista').style.display = 'block';
+                                }
+                                return;
+                            }
+
+                            try {
+                                const parseado = JSON.parse(dataRaw);
+                                if (parseado.content) {
+                                    textoAcumuladoLocal += parseado.content;
+                                    
+                                    // 🌟 EFECTO MÁQUINA DE ESCRIBIR: Actualizamos el HTML en tiempo real
+                                    aiDiv.innerHTML = DOMPurify.sanitize(marked.parse(textoAcumuladoLocal));
+                                    box.scrollTop = box.scrollHeight;
+                                }
+                            } catch(e) {
+                                // Fragmentos incompletos se ignoran hasta la siguiente ráfaga
+                            }
+                        }
+                    });
+                }
+            } catch(error) {
+                console.error(error);
+                aiDiv.innerHTML = "❌ **Error de conexión:** No se pudo establecer contacto con el servidor de Alucilex.";
+            } finally {
+                // 3. Liberar la interfaz solo cuando se cierra el quiz
+                respuestaChatAcumulada = textoAcumuladoLocal;
+                
+                if (!quizActivo) {
+                    input.disabled = false;
+                    btn.disabled = false;
+                    input.focus();
+                }
+            }
+        }
+
+        // ================= MOTOR DE QUIZ ALEATORIO =================
+        function abrirQuiz() {
+            document.getElementById('quiz-modal').style.display = 'flex';
+            document.getElementById('aviso-respuesta-lista').style.display = 'none';
+            quizActivo = true;
+            cargarPreguntaAleatoria();
+        }
+
+        function cerrarQuiz() {
+            document.getElementById('quiz-modal').style.display = 'none';
+            quizActivo = false;
+            
+            // 🌟 NUEVO: Renderiza el contenido usando la referencia en memoria y libera los botones
+            if (respuestaChatAcumulada) {
+                if (divMensajeActual) {
+                    divMensajeActual.style.display = 'block';
+                    divMensajeActual.innerHTML = DOMPurify.sanitize(marked.parse(respuestaChatAcumulada));
+                    divMensajeActual.className = 'msg ai';
+                }
+                
+                document.getElementById('pregunta-input').disabled = false;
+                document.getElementById('btn-enviar').disabled = false;
+                
+                const box = document.getElementById('chat-box');
+                box.scrollTop = box.scrollHeight;
+                
+                // Limpieza para el siguiente ciclo
+                respuestaChatAcumulada = '';
+                divMensajeActual = null; 
+            }
+        }
+
+        function cargarPreguntaAleatoria() {
+            respuestaUsuarioDada = false;
+            preguntaServidorData = null;
+            
+            // Estado de Carga Inicial
+            document.getElementById('quiz-titulo-contexto').innerHTML = `Análizando articulo <div class="cargando-spinner" style="width: 12px; height: 12px; margin-left: 5px;"></div>`;
+            document.getElementById('quiz-articulo').innerHTML = '';
+            document.getElementById('quiz-pregunta').innerText = '';
+            document.getElementById('quiz-opciones').innerHTML = '';
+            document.getElementById('quiz-feedback').style.display = 'none';
+            document.getElementById('btn-siguiente').style.display = 'none';
+
+            fetch('https://alucilex.onrender.com/api/quiz/generar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({}) 
+            })
+            .then(r => r.json())
+            .then(data => {
+                // 🌟 NUEVO: Failsafe para evitar que se quede pegado si el backend envía error
+                if (data.error) throw new Error(data.error);
+                actualizarPreguntaConServidor(data);
+            })
+            .catch(err => {
+                document.getElementById('quiz-titulo-contexto').innerText = "Motor Ocupado";
+                document.getElementById('quiz-articulo').innerText = "La Inteligencia Artificial está priorizando la respuesta principal de tu chat. ¡Cierra esta ventana en unos segundos para verla!";
+                document.getElementById('quiz-pregunta').innerText = "";
+            });
+        }
+
+        function actualizarPreguntaConServidor(data) {
+            if(data.articulo && data.articulo.numero) {
+                document.getElementById('quiz-titulo-contexto').innerText = `Referencia Legal: ${data.articulo.numero} - ${data.articulo.titulo || 'Código Civil'}`;
+                
+                let contenidoHtml = `<span style="font-style: italic; color: #333;">"${data.articulo.texto}"</span>`;
+                
+                if(data.articulo.analisisIA) {
+                    contenidoHtml += `
+                    <div style="margin-top: 15px; background: #eff6ff; border-radius: 8px; padding: 15px; border: 1px solid #bfdbfe;">
+                        <h4 style="margin-top: 0; margin-bottom: 8px; color: #1e40af; font-size: 14px;">🎓 Análisis del Artículo:</h4>
+                        <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #1e3a8a;">${data.articulo.analisisIA}</p>
+                    </div>`;
+                }
+                
+                document.getElementById('quiz-articulo').innerHTML = contenidoHtml;
+            } else {
+                document.getElementById('quiz-titulo-contexto').innerText = "Práctica General";
+                document.getElementById('quiz-articulo').innerText = "Conceptos Doctrinarios";
+            }
+
+            document.getElementById('quiz-pregunta').innerText = data.pregunta;
+            
+            const contOpciones = document.getElementById('quiz-opciones');
+            contOpciones.innerHTML = '';
+            data.opciones.forEach((op, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'btn-opcion';
+                btn.innerText = op;
+                btn.style.cssText = 'padding: 12px; background: white; border: 2px solid #e2e8f0; border-radius: 8px; text-align: left; cursor: pointer; font-size: 15px; transition: all 0.2s;';
+                btn.addEventListener('click', () => verificarRespuesta(idx, data.correcta, data.explicacion));
+                contOpciones.appendChild(btn);
+            });
+        }
+        function verificarRespuesta(opcionElegida, correctaIdx, explicacion) {
+            if (respuestaUsuarioDada) return;
+            respuestaUsuarioDada = true;
+            
+            const feedback = document.getElementById('quiz-feedback');
+            const resultado = document.getElementById('quiz-resultado');
+            const expl = document.getElementById('quiz-explicacion');
+            const compartir = document.getElementById('compartir-botones');
+            
+            document.querySelectorAll('.btn-opcion').forEach(btn => btn.disabled = true);
+            
+            if (opcionElegida === correctaIdx) {
+                resultado.innerHTML = '✔️ ¡Correcto!';
+                resultado.style.color = '#166534';
+                feedback.style.background = '#f0fdf4';
+                compartir.style.display = 'block';
+                document.getElementById('btn-compartir').onclick = compartirLogro;
+            } else {
+                resultado.innerHTML = '❌ Incorrecto. La respuesta correcta era la opción ' + (correctaIdx+1) + '.';
+                resultado.style.color = '#991b1b';
+                feedback.style.background = '#fef2f2';
+                compartir.style.display = 'none';
+            }
+            
+            expl.innerText = '📚 ' + (explicacion || 'Revisa la ley para más detalles.');
+            feedback.style.display = 'block';
+            document.getElementById('btn-siguiente').style.display = 'block';
+        }
+
+        function compartirLogro() {
+            const url = window.location.href;
+            const mensaje = `⚖️ Estoy estudiando Derecho Civil chileno en Alucilex. ¡Acabo de acertar un caso práctico de nivel examen de grado! Pruébalo en: ${url}`;
+            if (navigator.share) {
+                navigator.share({ title: 'Alucilex', text: mensaje, url: url }).catch(() => {});
+            } else {
+                navigator.clipboard.writeText(mensaje).then(() => alert('Enlace copiado. ¡Compártelo!'));
+            }
+        }
+    </script>
+</body>
+</html>
