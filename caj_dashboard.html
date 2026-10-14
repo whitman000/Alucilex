@@ -51,8 +51,98 @@
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
         .modal-content { background: white; padding: 22px; border-radius: 10px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
     </style>
+
+<style id="estilos-caj-auth">
+  .modal-auth-overlay {
+    position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center;
+    z-index: 99999;
+  }
+  .modal-auth-box {
+    background: #ffffff; border-radius: 14px; width: 92%; max-width: 440px;
+    padding: 30px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  .modal-auth-header { text-align: center; margin-bottom: 24px; }
+  .modal-auth-header h2 { margin: 0 0 8px 0; color: #0f172a; font-size: 1.35rem; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .modal-auth-header p { margin: 0; color: #64748b; font-size: 0.88rem; }
+  .auth-form-group { margin-bottom: 16px; }
+  .auth-form-group label { display: block; font-size: 0.82rem; font-weight: 600; color: #334155; margin-bottom: 6px; }
+  .auth-form-group input {
+    width: 100%; box-sizing: border-box; padding: 10px 14px; border: 1.5px solid #cbd5e1;
+    border-radius: 8px; font-size: 0.95rem; outline: none; transition: border-color 0.2s;
+  }
+  .auth-form-group input:focus { border-color: #059669; }
+  .btn-auth-submit {
+    width: 100%; padding: 12px; background: #059669; color: white; border: none;
+    border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn-auth-submit:hover { background: #047857; }
+  .auth-error { color: #dc2626; font-size: 0.82rem; margin-top: 10px; text-align: center; display: none; }
+  .user-badge-bar {
+    display: flex; align-items: center; gap: 12px; background: rgba(5, 150, 105, 0.1);
+    border: 1px solid #059669; padding: 6px 14px; border-radius: 8px; font-size: 0.85rem; color: #065f46;
+  }
+  .btn-logout {
+    background: transparent; border: 1px solid #ef4444; color: #ef4444;
+    padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 0.8rem;
+  }
+  .btn-logout:hover { background: #ef4444; color: white; }
+  .btn-coordinacion-top { background: #059669; color: #ffffff; border: 1px solid #047857; padding: 7px 14px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: none; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+</style>
+
 </head>
 <body>
+
+<!-- MODAL DE ACCESO / LOGIN CAJ -->
+<div id="modal-caj-login" class="modal-auth-overlay" style="display: none;">
+  <div class="modal-auth-box">
+    <div class="modal-auth-header">
+      <h2>🏛️ Acceso Corporación</h2>
+      <p>Sistema Forense y Asistencia Jurídica CAJ</p>
+    </div>
+    <form id="form-caj-login" onsubmit="ejecutarLoginCAJ(event)">
+      <div class="auth-form-group">
+        <label for="login-identificador">WhatsApp (+569...) o RUT</label>
+        <input type="text" id="login-identificador" placeholder="+56957948583 o 12.899.975-2" required autocomplete="username">
+      </div>
+      <div class="auth-form-group">
+        <label for="login-pin">Código PIN</label>
+        <input type="password" id="login-pin" placeholder="••••" maxlength="8" required autocomplete="current-password">
+      </div>
+      <button type="submit" id="btn-login-caj" class="btn-auth-submit">Ingresar al Sistema</button>
+      <div id="login-error-msg" class="auth-error"></div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL COORDINACIÓN DEL CENTRO (SOLO COORDINADOR) -->
+<div id="modal-caj-coordinacion" class="modal-auth-overlay" style="display: none;">
+  <div class="modal-auth-box" style="max-width: 600px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3 style="margin: 0; color: #0f172a;">📋 Coordinación del Centro - Postulantes</h3>
+      <button onclick="cerrarCoordinacion()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer;">✕</button>
+    </div>
+    <div style="margin-bottom: 20px;">
+      <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; color: #475569;">Registrar Nuevo Postulante</h4>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <input type="text" id="post-nombre" placeholder="Nombre completo" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+        <input type="text" id="post-rut" placeholder="RUT (12.345.678-k)" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+        <input type="text" id="post-tel" placeholder="WhatsApp (+569...)" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+        <input type="text" id="post-pin" placeholder="PIN (ej: 1234)" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+      </div>
+      <button onclick="guardarPostulante()" style="margin-top: 10px; width: 100%; background: #059669; color: white; border: none; padding: 9px; border-radius: 6px; cursor: pointer; font-weight: 600;">Registrar Postulante</button>
+    </div>
+    <div>
+      <h4 style="margin: 0 0 10px 0; font-size: 0.9rem; color: #475569;">Postulantes Registrados</h4>
+      <div id="lista-postulantes-tabla" style="max-height: 200px; overflow-y: auto; font-size: 0.85rem; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px;">
+        Cargando postulantes...
+      </div>
+    </div>
+  </div>
+</div>
+
 
 <header>
     <div>
@@ -227,7 +317,7 @@
         if (btnActualizar) btnActualizar.textContent = '⏳ Cargando...';
 
         try {
-            const res = await fetch('/api/caj/casos');
+            const res = await fetch('https://alucilex.onrender.com/api/caj/casos');
             const data = await res.json();
             
             const casos = Array.isArray(data) ? data : (data.casos || []);
@@ -356,113 +446,34 @@
         if (caso.escrito_judicial) document.getElementById('resultadoEscrito').textContent = caso.escrito_judicial;
     }
 
-    function renderizarAdjuntos(docs) {
-        const contenedor = document.getElementById('listaAdjuntos');
-        contenedor.innerHTML = '';
-        if (!docs || docs.length === 0) {
-            contenedor.innerHTML = '<div style="font-size: 12px; color: #64748b;">No hay documentos probatorios adjuntos en esta causa.</div>';
-            return;
-        }
+    
+function renderizarAdjuntos(adjuntos, idCaso) {
+  const cont = document.getElementById('lista-adjuntos') || document.querySelector('.adjuntos-container');
+  if (!cont) return;
+  if (!adjuntos || adjuntos.length === 0) {
+    cont.innerHTML = '<div style="color: #94a3b8; font-size: 0.85rem; padding: 8px;">No hay documentos probatorios adjuntos aún.</div>';
+    return;
+  }
+  cont.innerHTML = adjuntos.map((adj, idx) => {
+    const nombre = adj.nombre_archivo || adj.nombre || adj.filename || ('Documento #' + (idx + 1));
+    const glosa = adj.resumen_probatorio || adj.glosa_para_otrosi || adj.resumen || '';
+    const tipo = adj.tipo_documento || 'Documento';
+    return `
+      <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+        <div>
+          <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
+            <span style="background: #059669; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">Doc #${idx + 1}</span>
+            <span style="font-weight: 600; color: #0f172a; font-size: 0.9rem;">${nombre}</span>
+            <span style="background: #e2e8f0; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem;">${tipo}</span>
+          </div>
+          ${glosa ? `<div style="font-size: 0.83rem; color: #475569; margin-top: 4px; line-height: 1.4;">📄 <em>${glosa}</em></div>` : ''}
+        </div>
+        ${idCaso ? `<button onclick="eliminarAdjunto('${idCaso}', ${idx})" style="background: #fee2e2; border: 1px solid #fecaca; color: #dc2626; border-radius: 6px; padding: 5px 8px; cursor: pointer; font-size: 0.8rem;" title="Eliminar documento">🗑️</button>` : ''}
+      </div>
+    `;
+  }).join('');
+}
 
-        docs.forEach((doc, idx) => {
-            const d = document.createElement('div');
-            d.className = 'doc-item';
-            d.innerHTML = `
-                <div style="flex: 1; padding-right: 10px;">
-                    <div class="doc-name">📄 ${doc.tipo || 'Documento'}: ${doc.nombreArchivo || 'S/N'}</div>
-                    <div class="doc-glosa">${doc.glosaOtrosi || doc.resumen || ''}</div>
-                </div>
-                <button class="btn btn-danger" onclick="eliminarAdjunto(${idx})">🗑️ Eliminar</button>
-            `;
-            contenedor.appendChild(d);
-        });
-    }
-
-    // ELIMINAR ADJUNTO
-    async function eliminarAdjunto(indice) {
-        if (!confirm('¿Deseas eliminar este documento probatorio de la causa?')) return;
-        try {
-            const res = await fetch(`/api/caj/casos/${casoActivoId}/adjuntos/${indice}`, { method: 'DELETE' });
-            const data = await res.json();
-            if (data.ok) {
-                renderizarAdjuntos(data.documentos_probatorios);
-                // Actualizar caso local
-                casoActivoData.documentos_probatorios = data.documentos_probatorios;
-            } else {
-                alert('Error al eliminar: ' + data.error);
-            }
-        } catch (e) {
-            alert('Error al comunicarse con el servidor: ' + e.message);
-        }
-    }
-
-    // GUARDAR CAMBIOS EN LA CAUSA (NO GRABADA EN PIEDRA)
-    async function guardarCambiosCausa() {
-        if (!casoActivoId) return;
-        const actualizacion = {
-            usuario_nombre: document.getElementById('editUsuario').value,
-            contraparte_nombre: document.getElementById('editContraparte').value,
-            materia: document.getElementById('editMateria').value,
-            tribunal: document.getElementById('editTribunal').value,
-            hechos: [document.getElementById('editHechos').value]
-        };
-
-        try {
-            const res = await fetch(`/api/caj/casos/${casoActivoId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(actualizacion)
-            });
-            const data = await res.json();
-            if (data.ok) {
-                alert('✅ Cambios guardados correctamente en la causa.');
-                cargarCasos();
-            } else {
-                alert('Error al guardar: ' + data.error);
-            }
-        } catch (e) {
-            alert('Error: ' + e.message);
-        }
-    }
-
-    // CREAR NUEVA CAUSA MANUAL
-    document.getElementById('formNuevaCausa').onsubmit = async (e) => {
-        e.preventDefault();
-        const nuevaCausa = {
-            usuario_nombre: document.getElementById('nuevoNombre').value,
-            usuario_rut: document.getElementById('nuevoRut').value,
-            materia: document.getElementById('nuevaMateria').value,
-            tribunal: document.getElementById('nuevoTribunal').value,
-            contraparte_nombre: document.getElementById('nuevaContraparte').value,
-            hechos: [document.getElementById('nuevosHechos').value],
-            canal: 'web',
-            creadoEn: new Date()
-        };
-
-        try {
-            const res = await fetch('/api/caj/nuevo', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(nuevaCausa)
-            });
-            const data = await res.json();
-            if (data.ok) {
-                alert('✅ Causa creada con éxito con ID: ' + data.id);
-                document.getElementById('formNuevaCausa').reset();
-                cargarCasos();
-            }
-        } catch (err) {
-            alert('Error al crear causa: ' + err.message);
-        }
-    };
-
-    // SUBIR Y ANALIZAR DOCUMENTO
-    async function subirYAnalizarDocumento() {
-        const fileInput = document.getElementById('archivoAdjunto');
-        if (!fileInput.files || fileInput.files.length === 0) {
-            alert('Selecciona un archivo PDF o imagen primero.');
-            return;
-        }
 
         const archivo = fileInput.files[0];
         const formData = new FormData();
@@ -484,7 +495,7 @@
                 alert('✅ Documento procesado y glosa probatoria extraída.');
                 fileInput.value = '';
                 // Recargar datos de la causa
-                const resC = await fetch('/api/caj/casos');
+                const resC = await fetch('https://alucilex.onrender.com/api/caj/casos');
                 const datac = await resC.json();
                 const casoActualizado = datac.casos.find(c => c.id === casoActivoId);
                 if (casoActualizado) seleccionarCaso(casoActualizado);
@@ -529,6 +540,148 @@
             btn.disabled = false;
         }
     }
+</script>
+
+
+<script id="script-caj-auth">
+  const API_AUTH_BASE = 'https://alucilex.onrender.com/api/caj';
+
+  function verificarSesionCAJ() {
+    const sesion = sessionStorage.getItem('caj_usuario');
+    if (!sesion) {
+      document.getElementById('modal-caj-login').style.display = 'flex';
+      return false;
+    }
+    const user = JSON.parse(sesion);
+    actualizarBarraUsuario(user);
+    return true;
+  }
+
+  function actualizarBarraUsuario(user) {
+    const cont = document.getElementById('user-profile-container');
+    if (cont) {
+      cont.innerHTML = `
+        <div class="user-badge-bar">
+          <span>👤 <strong>${user.nombre || 'Usuario'}</strong> (${user.rol === 'coordinador' ? 'Coordinador' : 'Postulante CAJ'})</span>
+          ${user.rol === 'coordinador' ? '<button class="btn-coordinacion-top" style="display:inline-flex;" onclick="abrirCoordinacion()">📋 Coordinación</button>' : ''}
+          <button class="btn-logout" onclick="cerrarSesionCAJ()">Salir</button>
+        </div>
+      `;
+    }
+  }
+
+  async function ejecutarLoginCAJ(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btn-login-caj');
+    const errDiv = document.getElementById('login-error-msg');
+    const identificador = document.getElementById('login-identificador').value.trim();
+    const pin = document.getElementById('login-pin').value.trim();
+
+    btn.disabled = true;
+    btn.innerText = 'Validando acceso...';
+    errDiv.style.display = 'none';
+
+    try {
+      const res = await fetch(`${API_AUTH_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identificador, pin })
+      });
+      const data = await res.json();
+      const user = data.usuario || data.postulante; if (data.ok && user) {
+        sessionStorage.setItem('caj_usuario', JSON.stringify(user));
+        document.getElementById('modal-caj-login').style.display = 'none';
+        actualizarBarraUsuario(user);
+        if (typeof cargarCasos === 'function') {
+          cargarCasos();
+        }
+      } else {
+        errDiv.innerText = data.error || 'Credenciales inválidas. Revise su número/RUT o PIN.';
+        errDiv.style.display = 'block';
+      }
+    } catch (err) {
+      errDiv.innerText = 'Error al conectar con el servidor: ' + err.message;
+      errDiv.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+      btn.innerText = 'Ingresar al Sistema';
+    }
+  }
+
+  function cerrarSesionCAJ() {
+    sessionStorage.removeItem('caj_usuario');
+    window.location.reload();
+  }
+
+  async function abrirCoordinacion() {
+    document.getElementById('modal-caj-coordinacion').style.display = 'flex';
+    cargarPostulantes();
+  }
+
+  function cerrarCoordinacion() {
+    document.getElementById('modal-caj-coordinacion').style.display = 'none';
+  }
+
+  async function cargarPostulantes() {
+    const list = document.getElementById('lista-postulantes-tabla');
+    try {
+      const res = await fetch(`${API_AUTH_BASE}/postulantes`);
+      const data = await res.json();
+      if (data.ok && data.postulantes) {
+        list.innerHTML = data.postulantes.map(p => `
+          <div style="padding: 6px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;">
+            <div><strong>${p.nombre}</strong> (${p.rut || 'S/RUT'}) - Tel: ${p.telefono}</div>
+            <span style="color: #059669; font-weight: 600;">${p.rol || 'postulante'}</span>
+          </div>
+        `).join('') || 'No hay postulantes registrados aún.';
+      }
+    } catch (e) {
+      list.innerText = 'Error al cargar: ' + e.message;
+    }
+  }
+
+  async function guardarPostulante() {
+    const nombre = document.getElementById('post-nombre').value.trim();
+    const rut = document.getElementById('post-rut').value.trim();
+    const telefono = document.getElementById('post-tel').value.trim();
+    const pin = document.getElementById('post-pin').value.trim();
+    if (!nombre || !telefono || !pin) return alert('Nombre, Teléfono y PIN son requeridos.');
+
+    try {
+      const res = await fetch(`${API_AUTH_BASE}/postulantes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, rut, telefono, pin, rol: 'postulante' })
+      });
+      const data = await res.json();
+      if (data.ok) {
+        alert('Postulante registrado con éxito');
+        document.getElementById('post-nombre').value = '';
+        document.getElementById('post-rut').value = '';
+        document.getElementById('post-tel').value = '';
+        document.getElementById('post-pin').value = '';
+        cargarPostulantes();
+      } else {
+        alert('Error: ' + data.error);
+      }
+    } catch (e) {
+      alert('Error de red: ' + e.message);
+    }
+  }
+
+  // Interceptar carga inicial para verificar autenticacion
+  window.addEventListener('DOMContentLoaded', () => {
+    if (!document.getElementById('user-profile-container')) {
+      const header = document.querySelector('header') || document.querySelector('.header') || document.body.firstElementChild;
+      if (header) {
+        const div = document.createElement('div');
+        div.id = 'user-profile-container';
+        div.style.marginLeft = 'auto';
+        header.appendChild(div);
+      }
+    }
+    verificarSesionCAJ();
+  });
 </script>
 
 </body>

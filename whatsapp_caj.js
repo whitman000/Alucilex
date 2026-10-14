@@ -1,3 +1,33 @@
+
+async function enviarRespuestaWhatsApp(telefonoDestino, texto) {
+    const phoneId = process.env.WHATSAPP_PHONE_ID || '1333646283173512';
+    const token = process.env.WHATSAPP_TOKEN || 'EAAaEAiblWC8BSlHlD6kJkLmZB2KwwrkA6iK0oPZCilifINtlLOeDnUYACPxWZBZBaXP6nBHdOegSDb0hvIn9d2VCtZAmAEZA3XG1opq2wdobNIEj4HM8AZAL5uwxZCIMFuqXvTPW29FK2ZB0kbscer1G3XqYQxsjCiRl2VHTwu66zqOWetfjgMTRPmrXwe97axIPWq5jRXBzyEdkrlHrkvKQ9NngfdbvCYwRYZCsq9J9DqoKncOHhbrh5n87ogoEFzlqAqn4FXFJKVZCccZCgQnJlTCPfgZDZD';
+    if (!token) {
+        console.warn('⚠️ No hay WHATSAPP_TOKEN configurado.');
+        return null;
+    }
+    const to = telefonoDestino.replace(/[^0-9]/g, '');
+    try {
+        const res = await axios.post(`https://graph.facebook.com/v21.0/${phoneId}/messages`, {
+            messaging_product: 'whatsapp',
+            recipient_type: 'individual',
+            to: to,
+            type: 'text',
+            text: { body: texto }
+        }, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        console.log(`✉️ Mensaje enviado exitosamente a WhatsApp: ${to}`);
+        return res.data;
+    } catch (err) {
+        console.error('❌ Error enviando a Meta Graph API:', err.response?.data || err.message);
+        return null;
+    }
+}
+
 // whatsapp_caj.js - Módulo de Acogida, Contención, Control de Etiquetas (Opción 1) y Asignación de Postulantes
 require('dotenv').config();
 const axios = require('axios');
@@ -58,26 +88,19 @@ async function procesarMensajeWhatsApp(textoUsuario, telefonoRemitente, telefono
 
     // Paso C: Prompt de acogida humana, empatía y extracción silenciosa
     const promptSistema = `Eres la Asistente de Acogida y Primera Escucha de la Corporación de Asistencia Judicial (CAJ) en Chile.
-Una persona te está contactando por WhatsApp en una situación de vulnerabilidad, estrés o conflicto legal/familiar.
+Una persona te está contactando por WhatsApp solicitando orientación socio-jurídica.
 
 REGLAS INVIOLABLES DE RESPUESTA:
-1. CONTENCIÓN Y EMPATÍA HUMANA: Responde con máxima calidez, respeto y comprensión. Valida las emociones del usuario de forma empática.
-2. PROHIBIDO DAR ASESORÍA O SOLUCIONES LEGALES: Tienes estrictamente PROHIBIDO citar artículos de leyes, dar consejos procesales o prometer resultados judiciales. La asesoría es exclusiva del abogado tutor o postulante.
-3. TRANQUILIDAD AL USUARIO: Hazle saber que todo su relato ha quedado debidamente registrado en el sistema de la CAJ y que el equipo jurídico del centro ya cuenta con sus antecedentes.
-// Instrucción para la IA en promptSistema:
-4. FORMATO OBLIGATORIO DE RESPUESTA (JSON):
-{
-  "respuesta_humana": "Mensaje cálido y empático de contención sin asesoría legal.",
-  "datos_extraidos": {
-    "nombre": "Nombre de quien escribe si lo menciona en el texto (ej: 'Ana María Pérez'), o null si no se identifica.",
-    "rut": "RUT del usuario si lo indica, o null.",
-    "materia": "Clasificación de la rama: 'Laboral', 'Familia - Alimentos', 'Familia - Cuidado Personal', 'Civil - Precario', etc.",
-    "tribunal": "Tribunal o ciudad que mencione, o null.",
-    "contraparte": "Nombre de la empresa, empleador o persona contra quien reclama, o null.",
-    "hechos": "Resumen claro y cronológico de los hechos relatados."
-  }
-}
-  `;
+1. CONTENCIÓN HUMANA Y EMPATÍA: Responde con máxima calidez, respeto y contención institucional.
+2. INDIVIDUALIZACIÓN COMPLETA (FICHA DE COMPARECENCIA):
+   En tu mensaje de respuesta confirma expresamente los antecedentes individualizados que la persona entregó:
+   - Nombre de quien comparece (o solicítalo si no lo indicó).
+   - RUT y domicilio si los mencionó.
+   - Contraparte individualizada (empleador, empresa o demandado).
+   - Materia del conflicto (Laboral, Alimentos, Cuidado Personal, etc.).
+   Indícale con claridad: "Sus datos han quedado debidamente individualizados e ingresados en el expediente de la CAJ Puente Alto".
+3. SIN ASESORÍA NI PROMESAS: Prohibido dar consejos legales de fondo o citar artículos de leyes; la asesoría corresponde exclusivamente al abogado tutor y postulante.
+4. TRANQUILIDAD INSTITUCIONAL: Hazle saber que la Coordinación del Centro (Carlos Rosas) y el equipo jurídico ya tienen sus antecedentes a la vista para asignación procesal.`;
 
     const promptUsuario = `MENSAJE DEL CIUDADANO POR WHATSAPP:
 """
