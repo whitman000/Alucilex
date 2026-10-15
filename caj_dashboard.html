@@ -313,98 +313,66 @@
 
     // CARGAR Y ACTUALIZAR LISTA DE CAUSAS (CON BOTÓN DE ELIMINAR)
     async function cargarCasos() {
-        const btnActualizar = document.querySelector('button[onclick="cargarCasos()"]');
-        if (btnActualizar) btnActualizar.textContent = '⏳ Cargando...';
+    const btnActualizar = document.querySelector('button[onclick="cargarCasos()"]');
+    if (btnActualizar) btnActualizar.textContent = '⏳ Cargando...';
 
-        try {
-            const res = await fetch('https://alucilex.onrender.com/api/caj/casos');
-            const data = await res.json();
-            
-            const casos = Array.isArray(data) ? data : (data.casos || []);
-            const contenedor = document.getElementById('listaCasos');
-            contenedor.innerHTML = '';
-
-            if (casos.length === 0) {
-                contenedor.innerHTML = '<div style="font-size: 12px; color: #64748b; text-align: center; padding: 15px;">No hay causas registradas.</div>';
-                return;
-            }
-
-            casos.forEach(caso => {
-                const item = document.createElement('div');
-                item.className = `case-item ${caso.id === casoActivoId ? 'active' : ''}`;
-                
-                let badgeClass = 'badge-familia';
-                const mat = (caso.materia || '').toLowerCase();
-                if (mat.includes('laboral')) badgeClass = 'badge-laboral';
-                else if (mat.includes('civil')) badgeClass = 'badge-civil';
-
-                item.innerHTML = `
-                    <div class="case-header">
-                        <span>${caso.usuario_nombre || caso.usuario?.nombre || 'Usuario S/N'}</span>
-                        <div style="display: flex; gap: 6px; align-items: center;">
-                            <span class="badge ${badgeClass}">${caso.materia || 'General'}</span>
-                            <button class="btn btn-danger" title="Eliminar Causa" onclick="eliminarCausa('${caso.id}', event)">🗑️</button>
-                        </div>
-                    </div>
-                    <div class="case-meta">
-                        ID: <code style="font-size: 10px; color: #1e3a8a;">${caso.id}</code><br>
-                        Contraparte: ${caso.contraparte_nombre || caso.contraparte?.nombre || 'S/D'}<br>
-                        Tribunal: ${caso.tribunal || caso.datos_causa?.tribunal || 'Por fijar'}
-                    </div>
-                `;
-                item.onclick = () => seleccionarCaso(caso);
-                contenedor.appendChild(item);
-            });
-
-            if (casoActivoId) {
-                const causaRefrescada = casos.find(c => c.id === casoActivoId);
-                if (causaRefrescada) {
-                    casoActivoData = causaRefrescada;
-                    renderizarAdjuntos(causaRefrescada.documentos_probatorios || []);
-                }
-            }
-
-        } catch (e) {
-            console.error('Error al cargar causas:', e);
-            alert('Error al cargar causas: ' + e.message);
-        } finally {
-            if (btnActualizar) {
-                btnActualizar.textContent = '✅ Actualizado';
-                setTimeout(() => { btnActualizar.textContent = '🔄 Actualizar'; }, 1000);
-            }
-        }
-    }
-
-    // ELIMINAR CAUSA COMPLETA
-    async function eliminarCausa(id, event) {
-        if (event) event.stopPropagation(); // Evita que se seleccione la causa al hacer clic en borrar
+    try {
+        const res = await fetch('https://alucilex.onrender.com/api/caj/casos');
+        const data = await res.json();
         
-        if (!confirm(`¿Estás seguro de eliminar permanentemente la causa ID: ${id}?\nEsta acción no se puede deshacer.`)) {
+        const casos = Array.isArray(data) ? data : (data.casos || []);
+        const contenedor = document.getElementById('listaCasos');
+        if (!contenedor) return;
+        contenedor.innerHTML = '';
+
+        if (casos.length === 0) {
+            contenedor.innerHTML = '<div style="font-size: 13px; color: #64748b; text-align: center; padding: 20px;">No hay causas registradas aún.</div>';
             return;
         }
 
-        try {
-            const res = await fetch(`/api/caj/casos/${id}`, { method: 'DELETE' });
-            const data = await res.json();
+        casos.forEach(caso => {
+            const item = document.createElement('div');
+            item.className = 'case-item ' + (caso.id === casoActivoId ? 'active' : '');
             
-            if (data.ok) {
-                alert('✅ Causa eliminada exitosamente.');
-                // Si la causa eliminada estaba abierta en pantalla, cerramos sus paneles
-                if (casoActivoId === id) {
-                    casoActivoId = null;
-                    casoActivoData = null;
-                    document.getElementById('panelExpediente').style.display = 'none';
-                    document.getElementById('panelAdjuntos').style.display = 'none';
-                    document.getElementById('panelGeneracion').style.display = 'none';
-                }
-                cargarCasos();
-            } else {
-                alert('Error al eliminar causa: ' + data.error);
+            let badgeClass = 'badge-familia';
+            const mat = (caso.materia || '').toLowerCase();
+            if (mat.includes('laboral')) badgeClass = 'badge-laboral';
+            else if (mat.includes('civil')) badgeClass = 'badge-civil';
+
+            const nombre = caso.usuario_nombre || caso.nombre || caso.usuario?.nombre || 'Usuario WhatsApp';
+            const contraparte = caso.contraparte_nombre || caso.contraparte || 'Por determinar';
+            const tribunal = caso.tribunal || 'CAJ Puente Alto';
+
+            item.innerHTML = `
+                <div class="case-header">
+                    <strong style="color: #0f172a; font-size: 0.95rem;">${nombre}</strong>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <span class="badge ${badgeClass}">${caso.materia || 'General'}</span>
+                        <button class="btn btn-danger" style="padding: 2px 6px; font-size: 0.75rem;" title="Eliminar Causa" onclick="eliminarCausa('${caso.id}', event)">🗑️</button>
+                    </div>
+                </div>
+                <div class="case-meta" style="font-size: 0.82rem; color: #64748b; margin-top: 6px; line-height: 1.4;">
+                    <div><strong>ID:</strong> <code style="font-size: 0.75rem; background: #f1f5f9; padding: 1px 4px; border-radius: 4px;">${caso.id}</code></div>
+                    <div><strong>Contraparte:</strong> ${contraparte}</div>
+                    <div><strong>Tribunal / Centro:</strong> ${tribunal}</div>
+                </div>
+            `;
+            item.onclick = () => seleccionarCaso(caso.id);
+            contenedor.appendChild(item);
+        });
+
+        if (casoActivoId) {
+            const causaRefrescada = casos.find(c => c.id === casoActivoId);
+            if (causaRefrescada && typeof renderizarDetalleCaso === 'function') {
+                renderizarDetalleCaso(causaRefrescada);
             }
-        } catch (e) {
-            alert('Error de conexión: ' + e.message);
         }
+    } catch (err) {
+        console.error('Error al cargar causas:', err);
+    } finally {
+        if (btnActualizar) btnActualizar.textContent = '🔄 Actualizar';
     }
+}
 
     function seleccionarCaso(caso) {
         casoActivoId = caso.id;
@@ -475,7 +443,12 @@ function renderizarAdjuntos(adjuntos, idCaso) {
 }
 
 
-        const archivo = fileInput.files[0];
+        async function subirYAnalizarDocumento(event) {
+    if (!casoActivoId) return alert('Seleccione una causa primero.');
+    const fileInput = document.getElementById('archivoAdjunto');
+    if (!fileInput || !fileInput.files[0]) return alert('Seleccione un documento primero.');
+
+    const archivo = fileInput.files[0];
         const formData = new FormData();
         formData.append('documento', archivo);
 
@@ -485,7 +458,7 @@ function renderizarAdjuntos(adjuntos, idCaso) {
 
         try {
             // Subir al caso activo
-            const res = await fetch(`/api/caj/adjuntos/${casoActivoId}`, {
+            const res = await fetch(`https://alucilex.onrender.com/api/caj/adjuntos/${casoActivoId}`, {
                 method: 'POST',
                 body: formData
             });
@@ -520,7 +493,7 @@ function renderizarAdjuntos(adjuntos, idCaso) {
         const tipo = document.getElementById('tipoEscrito').value;
 
         try {
-            const res = await fetch(`/api/caj/procesar/${casoActivoId}`, {
+            const res = await fetch(`https://alucilex.onrender.com/api/caj/procesar/${casoActivoId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tipoEscrito: tipo })
@@ -680,7 +653,7 @@ function renderizarAdjuntos(adjuntos, idCaso) {
         header.appendChild(div);
       }
     }
-    verificarSesionCAJ();
+    if (verificarSesionCAJ()) { cargarCasos(); } // autoinicio
   });
 </script>
 
