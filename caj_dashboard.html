@@ -117,6 +117,30 @@
   </div>
 </div>
 
+
+<!-- MODAL VINCULACIÓN WHATSAPP QR (BAILEYS MULTISESIÓN) -->
+<div id="modal-caj-qr" class="modal-auth-overlay" style="display: none;">
+  <div class="modal-auth-box" style="max-width: 460px; text-align: center;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+      <h3 style="margin: 0; color: #0f172a;">📱 Vincular mi WhatsApp CAJ</h3>
+      <button onclick="cerrarModalQR()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer;">✕</button>
+    </div>
+    <p style="font-size: 0.85rem; color: #475569; margin-bottom: 14px;">
+      Escanea este código desde tu WhatsApp (<strong>Dispositivos vinculados → Vincular un dispositivo</strong>). Prueba local: etiqueta un chat de prueba como Usuario CAJ; los permisos remotos se implementarán después.
+    </p>
+    <div id="qr-estado-badge" style="display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 0.82rem; font-weight: 600; background: #fef3c7; color: #92400e; margin-bottom: 14px;">
+      ⏳ Consultando estado de conexión...
+    </div>
+    <div id="qr-imagen-container" style="min-height: 260px; display: flex; align-items: center; justify-content: center; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 12px; background: #f8fafc; margin-bottom: 14px;">
+      <span style="color: #64748b; font-size: 0.85rem;">Solicitando código QR al servidor...</span>
+    </div>
+    <div style="display: flex; gap: 10px;">
+      <button onclick="solicitarNuevoQR()" style="flex: 1; background: #059669; color: white; border: none; padding: 9px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">🔄 Actualizar / Generar QR</button>
+      <button onclick="desvincularWhatsAppQR()" style="background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; padding: 9px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.82rem;">Desvincular</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL COORDINACIÓN DEL CENTRO (SOLO COORDINADOR) -->
 <div id="modal-caj-coordinacion" class="modal-auth-overlay" style="display: none;">
   <div class="modal-auth-box" style="max-width: 600px;">
@@ -229,6 +253,18 @@
                     <input type="text" id="editUsuario">
                 </div>
                 <div>
+                    <label>RUT del Usuario:</label>
+                    <input type="text" id="editRut" placeholder="S/RUT">
+                </div>
+                <div>
+                    <label>Teléfono / WhatsApp:</label>
+                    <input type="text" id="editTelefono" placeholder="S/Teléfono">
+                </div>
+                <div>
+                    <label>Domicilio / Comuna:</label>
+                    <input type="text" id="editDomicilio" placeholder="S/Domicilio">
+                </div>
+                <div>
                     <label>Contraparte / Demandado:</label>
                     <input type="text" id="editContraparte">
                 </div>
@@ -253,6 +289,10 @@
 
             <label>Relato de los Hechos:</label>
             <textarea id="editHechos" style="min-height: 80px;"></textarea>
+            <label>Resumen de la atención por WhatsApp (IA, pendiente de revisión):</label>
+            <div id="resumenAtencionIA" style="white-space:pre-wrap; padding:12px; background:#f1f5f9; border-radius:8px; font-size:13px;">Sin resumen.</div>
+            <button type="button" class="btn btn-outline" style="margin-top:8px;" onclick="reactivarRecepcionIA()">Reactivar recepción IA de esta conversación</button>
+            <p style="font-size:12px;color:#64748b;margin-top:6px;">Cuando escribe el asesor, la IA deja de responder y sigue registrando antecedentes. Este botón autoriza que vuelva a responder.</p>
 
             <button class="btn btn-outline" style="margin-top: 8px; width: 100%; border-color: var(--primary-light); color: var(--primary);" onclick="guardarCambiosCausa()">💾 Guardar Correcciones de la Causa en BD</button>
         </div>
@@ -303,82 +343,99 @@
 </div>
 
 <script>
+    const API_BASE = '/api/caj';
     let casoActivoId = null;
     let casoActivoData = null;
+    let listaCasosGlobal = [];
 
-    // Cargar casos al iniciar
-    window.onload = () => {
-        cargarCasos();
-    };
-
-    // CARGAR Y ACTUALIZAR LISTA DE CAUSAS (CON BOTÓN DE ELIMINAR)
+    // CARGAR Y ACTUALIZAR LISTA DE CAUSAS
     async function cargarCasos() {
-    const btnActualizar = document.querySelector('button[onclick="cargarCasos()"]');
-    if (btnActualizar) btnActualizar.textContent = '⏳ Cargando...';
+        const btnActualizar = document.querySelector('button[onclick="cargarCasos()"]');
+        if (btnActualizar) btnActualizar.textContent = '⏳ Cargando...';
 
-    try {
-        const res = await fetch('https://alucilex.onrender.com/api/caj/casos');
-        const data = await res.json();
-        
-        const casos = Array.isArray(data) ? data : (data.casos || []);
-        const contenedor = document.getElementById('listaCasos');
-        if (!contenedor) return;
-        contenedor.innerHTML = '';
-
-        if (casos.length === 0) {
-            contenedor.innerHTML = '<div style="font-size: 13px; color: #64748b; text-align: center; padding: 20px;">No hay causas registradas aún.</div>';
-            return;
-        }
-
-        casos.forEach(caso => {
-            const item = document.createElement('div');
-            item.className = 'case-item ' + (caso.id === casoActivoId ? 'active' : '');
+        try {
+            const res = await fetch(`${API_BASE}/casos`);
+            const data = await res.json();
             
-            let badgeClass = 'badge-familia';
-            const mat = (caso.materia || '').toLowerCase();
-            if (mat.includes('laboral')) badgeClass = 'badge-laboral';
-            else if (mat.includes('civil')) badgeClass = 'badge-civil';
+            const todosLosCasos = Array.isArray(data) ? data : (data.casos || []);
+        const sesionStr = sessionStorage.getItem('caj_usuario');
+        const usuarioActivo = sesionStr ? JSON.parse(sesionStr) : null;
+        const casos = (usuarioActivo && usuarioActivo.rol !== 'coordinador')
+            ? todosLosCasos.filter(c => {
+                const telUser = String(usuarioActivo.telefono || '').replace(/[^0-9]/g, '');
+                const telCaso = String(c.postulante_telefono || '').replace(/[^0-9]/g, '');
+                return (c.postulante_id === usuarioActivo.id) ||
+                       (telUser && telCaso && telCaso.includes(telUser)) ||
+                       (c.postulante_nombre && usuarioActivo.nombre && c.postulante_nombre.toLowerCase() === usuarioActivo.nombre.toLowerCase());
+            })
+            : todosLosCasos;
+            listaCasosGlobal = casos;
+            const contenedor = document.getElementById('listaCasos');
+            if (!contenedor) return;
+            contenedor.innerHTML = '';
 
-            const nombre = caso.usuario_nombre || caso.nombre || caso.usuario?.nombre || 'Usuario WhatsApp';
-            const contraparte = caso.contraparte_nombre || caso.contraparte || 'Por determinar';
-            const tribunal = caso.tribunal || 'CAJ Puente Alto';
-
-            item.innerHTML = `
-                <div class="case-header">
-                    <strong style="color: #0f172a; font-size: 0.95rem;">${nombre}</strong>
-                    <div style="display: flex; gap: 6px; align-items: center;">
-                        <span class="badge ${badgeClass}">${caso.materia || 'General'}</span>
-                        <button class="btn btn-danger" style="padding: 2px 6px; font-size: 0.75rem;" title="Eliminar Causa" onclick="eliminarCausa('${caso.id}', event)">🗑️</button>
-                    </div>
-                </div>
-                <div class="case-meta" style="font-size: 0.82rem; color: #64748b; margin-top: 6px; line-height: 1.4;">
-                    <div><strong>ID:</strong> <code style="font-size: 0.75rem; background: #f1f5f9; padding: 1px 4px; border-radius: 4px;">${caso.id}</code></div>
-                    <div><strong>Contraparte:</strong> ${contraparte}</div>
-                    <div><strong>Tribunal / Centro:</strong> ${tribunal}</div>
-                </div>
-            `;
-            item.onclick = () => seleccionarCaso(caso.id);
-            contenedor.appendChild(item);
-        });
-
-        if (casoActivoId) {
-            const causaRefrescada = casos.find(c => c.id === casoActivoId);
-            if (causaRefrescada && typeof renderizarDetalleCaso === 'function') {
-                renderizarDetalleCaso(causaRefrescada);
+            if (casos.length === 0) {
+                contenedor.innerHTML = '<div style="font-size: 13px; color: #64748b; text-align: center; padding: 20px;">No hay causas registradas aún.</div>';
+                return;
             }
-        }
-    } catch (err) {
-        console.error('Error al cargar causas:', err);
-    } finally {
-        if (btnActualizar) btnActualizar.textContent = '🔄 Actualizar';
-    }
-}
 
-    function seleccionarCaso(caso) {
+            casos.forEach(caso => {
+                const item = document.createElement('div');
+                item.className = 'case-item ' + (caso.id === casoActivoId ? 'active' : '');
+                
+                let badgeClass = 'badge-familia';
+                const mat = (caso.materia || '').toLowerCase();
+                if (mat.includes('laboral')) badgeClass = 'badge-laboral';
+                else if (mat.includes('civil')) badgeClass = 'badge-civil';
+
+                const nombre = caso.usuario_nombre || caso.nombre || caso.usuario?.nombre || 'Usuario S/N';
+                const rut = caso.usuario_rut || caso.rut_titular || caso.usuario?.rut || 'S/RUT';
+                const contraparte = caso.contraparte_nombre || (typeof caso.contraparte === 'string' ? caso.contraparte : caso.contraparte?.nombre) || 'Por determinar';
+                const tribunal = caso.tribunal || caso.datos_causa?.tribunal || 'CAJ Puente Alto';
+                const numDocs = Array.isArray(caso.documentos_probatorios) ? caso.documentos_probatorios.length : 0;
+
+                item.innerHTML = `
+                    <div class="case-header">
+                        <strong style="color: #0f172a; font-size: 0.95rem;">${nombre}</strong>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            <span class="badge ${badgeClass}">${caso.materia || 'General'}</span>
+                            <button class="btn btn-danger" style="padding: 2px 6px; font-size: 0.75rem;" title="Eliminar Causa" onclick="eliminarCausa('${caso.id}', event)">🗑️</button>
+                        </div>
+                    </div>
+                    <div class="case-meta" style="font-size: 0.82rem; color: #64748b; margin-top: 6px; line-height: 1.4;">
+                        <div><strong>ID:</strong> <code style="font-size: 0.75rem; background: #f1f5f9; padding: 1px 4px; border-radius: 4px;">${caso.id}</code> | <strong>RUT:</strong> ${rut}</div>
+                        <div><strong>Contraparte:</strong> ${contraparte}</div>
+                        <div><strong>Tribunal / Centro:</strong> ${tribunal} (${numDocs} adjuntos)</div>
+                    </div>
+                `;
+                item.onclick = () => seleccionarCaso(caso);
+                contenedor.appendChild(item);
+            });
+
+            if (casoActivoId) {
+                const causaRefrescada = casos.find(c => c.id === casoActivoId);
+                if (causaRefrescada) {
+                    seleccionarCaso(causaRefrescada);
+                }
+            }
+        } catch (err) {
+            console.error('Error al cargar causas:', err);
+        } finally {
+            if (btnActualizar) btnActualizar.textContent = '🔄 Actualizar';
+        }
+    }
+
+    // SELECCIONAR CASO Y DESPLEGAR INDIVIDUALIZACIÓN Y DOCUMENTOS
+    function seleccionarCaso(casoOId) {
+        let caso = casoOId;
+        if (typeof casoOId === 'string') {
+            caso = listaCasosGlobal.find(c => c.id === casoOId);
+        }
+        if (!caso || typeof caso !== 'object') return;
+
         casoActivoId = caso.id;
         casoActivoData = caso;
 
-        // Actualizar visualmente la selección en la lista
         document.querySelectorAll('.case-item').forEach(el => {
             el.classList.toggle('active', el.innerHTML.includes(caso.id));
         });
@@ -387,17 +444,40 @@
         document.getElementById('panelAdjuntos').style.display = 'block';
         document.getElementById('panelGeneracion').style.display = 'block';
 
-        // Llenar datos en los campos editables
-        document.getElementById('expedienteId').textContent = caso.id;
-        document.getElementById('badgeMateria').textContent = caso.materia || 'General';
-        document.getElementById('editUsuario').value = caso.usuario_nombre || caso.usuario?.nombre || '';
-        document.getElementById('editContraparte').value = caso.contraparte_nombre || caso.contraparte?.nombre || '';
-        document.getElementById('editMateria').value = caso.materia || 'Otra';
-        document.getElementById('editTribunal').value = caso.tribunal || caso.datos_causa?.tribunal || '';
-        document.getElementById('editHechos').value = Array.isArray(caso.hechos) ? caso.hechos.join('. ') : (caso.hechos || caso.relato_hechos || '');
+        const nombre = caso.usuario_nombre || caso.nombre || caso.usuario?.nombre || '';
+        const rut = caso.usuario_rut || (caso.rut_titular !== 'SIN-RUT' ? caso.rut_titular : '') || caso.usuario?.rut || '';
+        const telefono = caso.telefono_contacto || caso.telefono || caso.usuario?.telefono || '';
+        const domicilio = caso.domicilio || caso.usuario?.domicilio || '';
+        const contraparte = caso.contraparte_nombre || (typeof caso.contraparte === 'string' ? caso.contraparte : caso.contraparte?.nombre) || '';
+        const materia = caso.materia || caso.datos_causa?.materia || 'Otra';
+        const tribunal = caso.tribunal || caso.datos_causa?.tribunal || '';
+        const hechos = Array.isArray(caso.hechos) ? caso.hechos.join('\n') : (caso.hechos || caso.relato_hechos || '');
 
-        // Sugerir tipo de escrito según la materia
-        const mat = (caso.materia || '').toLowerCase();
+        document.getElementById('expedienteId').textContent = caso.id;
+        document.getElementById('badgeMateria').textContent = materia;
+        document.getElementById('editUsuario').value = nombre;
+        if (document.getElementById('editRut')) document.getElementById('editRut').value = rut;
+        if (document.getElementById('editTelefono')) document.getElementById('editTelefono').value = telefono;
+        if (document.getElementById('editDomicilio')) document.getElementById('editDomicilio').value = domicilio;
+        document.getElementById('editContraparte').value = contraparte;
+
+        const selectMat = document.getElementById('editMateria');
+        if (selectMat) {
+            const existeOpcion = Array.from(selectMat.options).some(opt => opt.value === materia);
+            if (!existeOpcion && materia) {
+                const nuevaOpt = document.createElement('option');
+                nuevaOpt.value = materia;
+                nuevaOpt.textContent = materia;
+                selectMat.appendChild(nuevaOpt);
+            }
+            selectMat.value = materia;
+        }
+
+        document.getElementById('editTribunal').value = tribunal;
+        document.getElementById('editHechos').value = hechos;
+        document.getElementById('resumenAtencionIA').textContent = caso.resumen_atencion_ia || 'Sin resumen de esta etapa.';
+
+        const mat = materia.toLowerCase();
         if (mat.includes('laboral')) {
             document.getElementById('tipoEscrito').value = 'Demanda Laboral por Despido Injustificado y Cobro de Prestaciones';
         } else if (mat.includes('alimento')) {
@@ -408,57 +488,62 @@
             document.getElementById('tipoEscrito').value = 'Demanda según antecedentes';
         }
 
-        renderizarAdjuntos(caso.documentos_probatorios || []);
+        renderizarAdjuntos(caso.documentos_probatorios || [], caso.id);
 
-        if (caso.informe_juridico) document.getElementById('resultadoInforme').textContent = caso.informe_juridico;
-        if (caso.escrito_judicial) document.getElementById('resultadoEscrito').textContent = caso.escrito_judicial;
+        document.getElementById('resultadoInforme').textContent = caso.informe_juridico || caso.analisis_juridico || 'El dictamen aparecerá aquí...';
+        document.getElementById('resultadoEscrito').textContent = caso.escrito_judicial || caso.escrito_borrador || 'El escrito formal aparecerá aquí...';
     }
 
-    
-function renderizarAdjuntos(adjuntos, idCaso) {
-  const cont = document.getElementById('lista-adjuntos') || document.querySelector('.adjuntos-container');
-  if (!cont) return;
-  if (!adjuntos || adjuntos.length === 0) {
-    cont.innerHTML = '<div style="color: #94a3b8; font-size: 0.85rem; padding: 8px;">No hay documentos probatorios adjuntos aún.</div>';
-    return;
-  }
-  cont.innerHTML = adjuntos.map((adj, idx) => {
-    const nombre = adj.nombre_archivo || adj.nombre || adj.filename || ('Documento #' + (idx + 1));
-    const glosa = adj.resumen_probatorio || adj.glosa_para_otrosi || adj.resumen || '';
-    const tipo = adj.tipo_documento || 'Documento';
-    return `
-      <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
-        <div>
-          <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px;">
-            <span style="background: #059669; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">Doc #${idx + 1}</span>
-            <span style="font-weight: 600; color: #0f172a; font-size: 0.9rem;">${nombre}</span>
-            <span style="background: #e2e8f0; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem;">${tipo}</span>
-          </div>
-          ${glosa ? `<div style="font-size: 0.83rem; color: #475569; margin-top: 4px; line-height: 1.4;">📄 <em>${glosa}</em></div>` : ''}
-        </div>
-        ${idCaso ? `<button onclick="eliminarAdjunto('${idCaso}', ${idx})" style="background: #fee2e2; border: 1px solid #fecaca; color: #dc2626; border-radius: 6px; padding: 5px 8px; cursor: pointer; font-size: 0.8rem;" title="Eliminar documento">🗑️</button>` : ''}
-      </div>
-    `;
-  }).join('');
-}
+    // RENDERIZAR ADJUNTOS CON GLOSA Y BADGE NUMERADO
+    function renderizarAdjuntos(adjuntos, idCaso) {
+        const cont = document.getElementById('listaAdjuntos') || document.getElementById('lista-adjuntos');
+        if (!cont) return;
+        if (!adjuntos || adjuntos.length === 0) {
+            cont.innerHTML = '<div style="color: #94a3b8; font-size: 0.85rem; padding: 8px;">No hay documentos probatorios adjuntos en esta causa.</div>';
+            return;
+        }
+        cont.innerHTML = adjuntos.map((adj, idx) => {
+            let d = adj;
+            if (typeof adj === 'string' && adj.startsWith('{')) {
+                try { d = JSON.parse(adj); } catch (e) {}
+            }
+            const nombre = d.nombre_archivo || d.nombreArchivo || d.nombre || d.filename || ('Documento #' + (idx + 1));
+            const glosa = d.resumen_probatorio || d.glosa_para_otrosi || d.glosaOtrosi || d.resumen || '';
+            const tipo = d.tipo_documento || d.tipo || 'Documento Probatorio';
+            return `
+                <div style="background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: flex-start; box-shadow: 0 1px 2px rgba(0,0,0,0.05);">
+                    <div>
+                        <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 4px; flex-wrap: wrap;">
+                            <span style="background: #059669; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700;">Doc #${idx + 1}</span>
+                            <span style="font-weight: 600; color: #0f172a; font-size: 0.9rem;">${nombre}</span>
+                            <span style="background: #e2e8f0; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem;">${tipo}</span>
+                        </div>
+                        ${glosa ? `<div style="font-size: 0.83rem; color: #475569; margin-top: 4px; line-height: 1.4;">📄 <em>${glosa}</em></div>` : ''}
+                    </div>
+                    ${idCaso ? `<button onclick="eliminarAdjunto('${idCaso}', ${idx})" style="background: #fee2e2; border: 1px solid #fecaca; color: #dc2626; border-radius: 6px; padding: 5px 8px; cursor: pointer; font-size: 0.8rem;" title="Eliminar documento">🗑️</button>` : ''}
+                </div>
+            `;
+        }).join('');
+    }
 
+    // SUBIR Y ANALIZAR DOCUMENTO CON IA
+    async function subirYAnalizarDocumento() {
+        if (!casoActivoId) return alert('Seleccione una causa primero.');
+        const fileInput = document.getElementById('archivoAdjunto');
+        if (!fileInput || !fileInput.files[0]) return alert('Seleccione un documento primero.');
 
-        async function subirYAnalizarDocumento(event) {
-    if (!casoActivoId) return alert('Seleccione una causa primero.');
-    const fileInput = document.getElementById('archivoAdjunto');
-    if (!fileInput || !fileInput.files[0]) return alert('Seleccione un documento primero.');
-
-    const archivo = fileInput.files[0];
+        const archivo = fileInput.files[0];
         const formData = new FormData();
         formData.append('documento', archivo);
 
-        const btn = event.target;
-        btn.textContent = '⏳ Analizando con IA...';
-        btn.disabled = true;
+        const btn = document.querySelector('.box-upload button');
+        if (btn) {
+            btn.textContent = '⏳ Analizando con IA...';
+            btn.disabled = true;
+        }
 
         try {
-            // Subir al caso activo
-            const res = await fetch(`https://alucilex.onrender.com/api/caj/adjuntos/${casoActivoId}`, {
+            const res = await fetch(`${API_BASE}/adjuntos/${casoActivoId}`, {
                 method: 'POST',
                 body: formData
             });
@@ -467,33 +552,104 @@ function renderizarAdjuntos(adjuntos, idCaso) {
             if (data.ok) {
                 alert('✅ Documento procesado y glosa probatoria extraída.');
                 fileInput.value = '';
-                // Recargar datos de la causa
-                const resC = await fetch('https://alucilex.onrender.com/api/caj/casos');
-                const datac = await resC.json();
-                const casoActualizado = datac.casos.find(c => c.id === casoActivoId);
-                if (casoActualizado) seleccionarCaso(casoActualizado);
+                await cargarCasos();
             } else {
-                alert('❌ Error: ' + data.error);
+                alert('❌ Error: ' + (data.error || 'No se pudo procesar'));
             }
         } catch (e) {
             alert('Error: ' + e.message);
         } finally {
-            btn.textContent = '🔍 Subir y Analizar Documento con IA';
-            btn.disabled = false;
+            if (btn) {
+                btn.textContent = '🔍 Subir y Analizar Documento con IA';
+                btn.disabled = false;
+            }
+        }
+    }
+
+    // ELIMINAR CAUSA
+    async function eliminarCausa(id, event) {
+        if (event) event.stopPropagation();
+        if (!confirm('¿Está seguro de eliminar este expediente de la base de datos?')) return;
+        try {
+            const res = await fetch(`${API_BASE}/casos/${id}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.ok) {
+                if (casoActivoId === id) {
+                    casoActivoId = null;
+                    document.getElementById('panelExpediente').style.display = 'none';
+                    document.getElementById('panelAdjuntos').style.display = 'none';
+                    document.getElementById('panelGeneracion').style.display = 'none';
+                }
+                cargarCasos();
+            } else {
+                alert('Error al eliminar: ' + (data.error || 'No se pudo eliminar'));
+            }
+        } catch (err) {
+            alert('Error de red: ' + err.message);
+        }
+    }
+
+    // ELIMINAR ADJUNTO
+    async function eliminarAdjunto(idCaso, index) {
+        if (!confirm('¿Desea eliminar este documento adjunto?')) return;
+        try {
+            const res = await fetch(`${API_BASE}/casos/${idCaso}/adjuntos/${index}`, { method: 'DELETE' });
+            const data = await res.json();
+            if (data.ok) {
+                await cargarCasos();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            alert('Error de red: ' + err.message);
+        }
+    }
+
+    // GUARDAR CAMBIOS CAUSA
+    async function guardarCambiosCausa() {
+        if (!casoActivoId) return;
+        const payload = {
+            usuario_nombre: document.getElementById('editUsuario').value.trim(),
+            usuario_rut: document.getElementById('editRut') ? document.getElementById('editRut').value.trim() : '',
+            telefono_contacto: document.getElementById('editTelefono') ? document.getElementById('editTelefono').value.trim() : '',
+            domicilio: document.getElementById('editDomicilio') ? document.getElementById('editDomicilio').value.trim() : '',
+            contraparte_nombre: document.getElementById('editContraparte').value.trim(),
+            materia: document.getElementById('editMateria').value,
+            tribunal: document.getElementById('editTribunal').value.trim(),
+            relato_hechos: document.getElementById('editHechos').value.trim(),
+            hechos: [document.getElementById('editHechos').value.trim()]
+        };
+        try {
+            const res = await fetch(`${API_BASE}/casos/${casoActivoId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.ok) {
+                alert('✅ Cambios guardados exitosamente.');
+                cargarCasos();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (err) {
+            alert('Error de red: ' + err.message);
         }
     }
 
     // PROCESAR DICTAMEN Y ESCRITO
     async function procesarCasoCompleto() {
         if (!casoActivoId) return;
-        const btn = event.target;
-        btn.textContent = '⏳ Redactando con IA...';
-        btn.disabled = true;
+        const btn = document.querySelector('#panelGeneracion button.btn-primary');
+        if (btn) {
+            btn.textContent = '⏳ Redactando con IA...';
+            btn.disabled = true;
+        }
 
         const tipo = document.getElementById('tipoEscrito').value;
 
         try {
-            const res = await fetch(`https://alucilex.onrender.com/api/caj/procesar/${casoActivoId}`, {
+            const res = await fetch(`${API_BASE}/procesar/${casoActivoId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tipoEscrito: tipo })
@@ -509,15 +665,65 @@ function renderizarAdjuntos(adjuntos, idCaso) {
         } catch (e) {
             alert('Error de conexión: ' + e.message);
         } finally {
-            btn.textContent = '⚖️ Generar Dictamen y Escrito';
-            btn.disabled = false;
+            if (btn) {
+                btn.textContent = '⚖️ Generar Dictamen y Escrito';
+                btn.disabled = false;
+            }
         }
     }
+
+    async function reactivarRecepcionIA() {
+        if (!casoActivoId || !confirm('¿Autorizar a la IA a responder al próximo mensaje de este usuario?')) return;
+        try {
+            const res = await fetch(`${API_BASE}/whatsapp/qr/reactivar`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ casoId: casoActivoId })
+            });
+            const data = await res.json();
+            alert(data.ok ? data.mensaje : data.error);
+        } catch (e) { alert('No se pudo reactivar la recepción.'); }
+    }
+
+    // FORMULARIO NUEVA CAUSA
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('formNuevaCausa');
+        if (form) {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const payload = {
+                    usuario_nombre: document.getElementById('nuevoNombre').value.trim(),
+                    usuario_rut: document.getElementById('nuevoRut').value.trim(),
+                    materia: document.getElementById('nuevaMateria').value,
+                    tribunal: document.getElementById('nuevoTribunal').value.trim(),
+                    contraparte_nombre: document.getElementById('nuevaContraparte').value.trim(),
+                    hechos: document.getElementById('nuevosHechos').value.trim(),
+                    canal: 'web'
+                };
+                try {
+                    const res = await fetch(`${API_BASE}/caso`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        alert('✅ Expediente creado con éxito.');
+                        form.reset();
+                        cargarCasos();
+                    } else {
+                        alert('Error: ' + data.error);
+                    }
+                } catch (err) {
+                    alert('Error de conexión: ' + err.message);
+                }
+            });
+        }
+    });
 </script>
 
 
 <script id="script-caj-auth">
-  const API_AUTH_BASE = 'https://alucilex.onrender.com/api/caj';
+  const API_AUTH_BASE = '/api/caj';
 
   function verificarSesionCAJ() {
     const sesion = sessionStorage.getItem('caj_usuario');
@@ -530,16 +736,114 @@ function renderizarAdjuntos(adjuntos, idCaso) {
     return true;
   }
 
+  let intervaloQR = null;
+
+  function obtenerIdSesionUsuario(user) {
+    if (!user) return 'coordinador_carlos';
+    if (user.rol === 'coordinador') return 'coordinador_carlos';
+    const limpio = String(user.telefono || user.rut || user.id || 'postulante').replace(/[^a-zA-Z0-9_-]/g, '_');
+    return 'post_' + limpio;
+  }
+
   function actualizarBarraUsuario(user) {
     const cont = document.getElementById('user-profile-container');
     if (cont) {
       cont.innerHTML = `
         <div class="user-badge-bar">
-          <span>👤 <strong>${user.nombre || 'Usuario'}</strong> (${user.rol === 'coordinador' ? 'Coordinador' : 'Postulante CAJ'})</span>
+          <span>👤 <strong>${user.nombre || 'Usuario'}</strong> (${user.rol === 'coordinador' ? 'Coordinador' : 'Asistente Jurídico'})</span>
+          <button class="btn-coordinacion-top" style="display:inline-flex; background:#2563eb; border-color:#1d4ed8;" onclick="abrirModalQR()">📱 Vincular WhatsApp QR</button>
           ${user.rol === 'coordinador' ? '<button class="btn-coordinacion-top" style="display:inline-flex;" onclick="abrirCoordinacion()">📋 Coordinación</button>' : ''}
           <button class="btn-logout" onclick="cerrarSesionCAJ()">Salir</button>
         </div>
       `;
+    }
+  }
+
+  async function abrirModalQR() {
+    document.getElementById('modal-caj-qr').style.display = 'flex';
+    await solicitarNuevoQR();
+    if (intervaloQR) clearInterval(intervaloQR);
+    intervaloQR = setInterval(consultarEstadoQR, 3500);
+  }
+
+  function cerrarModalQR() {
+    document.getElementById('modal-caj-qr').style.display = 'none';
+    if (intervaloQR) {
+      clearInterval(intervaloQR);
+      intervaloQR = null;
+    }
+  }
+
+  function pintarEstadoQR(data) {
+    const badge = document.getElementById('qr-estado-badge');
+    const box = document.getElementById('qr-imagen-container');
+    if (!badge || !box) return;
+
+    if (data.ok === false || data.estado === 'error') {
+      badge.innerText = 'No se pudo conectar';
+      box.textContent = data.error || 'Revisa la terminal del servidor.';
+      return;
+    }
+    if (data.estado === 'conectado') {
+      badge.style.background = '#dcfce7';
+      badge.style.color = '#166534';
+      badge.innerText = '🟢 WhatsApp conectado (prueba local) (' + (data.numero || 'Activo') + ')';
+      box.innerHTML = '<div style="padding: 20px; color: #059669; font-weight: 600;">✅ WhatsApp vinculado al servidor de prueba.<br><small style="color:#475569; font-weight:400;">Mantén el servidor local encendido. Solo se procesan chats con etiqueta CAJ reconocida.</small></div>';
+    } else if (data.estado === 'esperando_qr' && data.qr) {
+      badge.style.background = '#fef3c7';
+      badge.style.color = '#92400e';
+      badge.innerText = '🟡 Escanea el código QR con tu celular';
+      box.innerHTML = `<img src="${data.qr}" alt="Código QR WhatsApp" style="width: 250px; height: 250px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);" />`;
+    } else {
+      badge.style.background = '#e2e8f0';
+      badge.style.color = '#334155';
+      badge.innerText = '⏳ Generando código QR en el servidor...';
+      box.innerHTML = '<span style="color: #64748b; font-size: 0.85rem;">Preparando sesión segura (tarda ~5 segundos)...</span>';
+    }
+  }
+
+  async function solicitarNuevoQR() {
+    const sesion = sessionStorage.getItem('caj_usuario');
+    const user = sesion ? JSON.parse(sesion) : { nombre: 'Carlos Rosas', rol: 'coordinador', telefono: '+56957948583' };
+    const sessionId = obtenerIdSesionUsuario(user);
+    try {
+      const res = await fetch(`${API_AUTH_BASE}/whatsapp/qr/iniciar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, nombre: user.nombre, telefono: user.telefono, id: user.id })
+      });
+      const data = await res.json();
+      pintarEstadoQR(data);
+    } catch (e) {
+      console.error('Error iniciando QR:', e);
+    }
+  }
+
+  async function consultarEstadoQR() {
+    const sesion = sessionStorage.getItem('caj_usuario');
+    const user = sesion ? JSON.parse(sesion) : { nombre: 'Carlos Rosas', rol: 'coordinador', telefono: '+56957948583' };
+    const sessionId = obtenerIdSesionUsuario(user);
+    try {
+      const res = await fetch(`${API_AUTH_BASE}/whatsapp/qr/estado/${encodeURIComponent(sessionId)}`);
+      const data = await res.json();
+      pintarEstadoQR(data);
+    } catch (e) {}
+  }
+
+  async function desvincularWhatsAppQR() {
+    if (!confirm('¿Deseas desvincular el WhatsApp actual para escanear otro teléfono?')) return;
+    const sesion = sessionStorage.getItem('caj_usuario');
+    const user = sesion ? JSON.parse(sesion) : { nombre: 'Carlos Rosas', rol: 'coordinador' };
+    const sessionId = obtenerIdSesionUsuario(user);
+    try {
+      await fetch(`${API_AUTH_BASE}/whatsapp/qr/desconectar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId })
+      });
+      await solicitarNuevoQR();
+    } catch (e) {
+      alert('Error al desvincular: ' + e.message);
     }
   }
 

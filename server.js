@@ -28,7 +28,7 @@ const {
 
 const { generarInformeJuridico, confeccionarEscritoJudicial } = require('./motor_caj');
 const { analizarDocumento, guardarDocumentoEnCaso } = require('./procesador_documentos');
-const { procesarMensajeWhatsApp } = require('./whatsapp_caj');
+const { procesarMensajeWhatsApp, iniciarSesionWhatsAppQR, obtenerEstadoSesionQR, desconectarSesionQR, reactivarRecepcionCaso } = require('./whatsapp_caj');
 
 // Importar los bancos estáticos de Alucilex
 const bancoPreguntasAlucilex = require('./banco_preguntas.js');
@@ -37,13 +37,37 @@ const bancoArticulosAlucilex = require('./banco_articulos.js');
 const app = express();
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname));
+// Servir únicamente archivos públicos conocidos; nunca credenciales ni sesiones.
+const archivosPublicos = new Set([
+    '/alucilex.html', '/caj_dashboard.html', '/escrituras.html', '/motor_escrituras.js', '/privacidad.html'
+]);
+app.use((req, res, next) => {
+    if ((req.method === 'GET' || req.method === 'HEAD') && archivosPublicos.has(req.path)) {
+        return res.sendFile(path.join(__dirname, req.path.slice(1)));
+    }
+    next();
+});
+// Etapa de pruebas: el control QR solo se admite desde el computador del servidor.
+app.use('/api/caj/whatsapp/qr', (req, res, next) => {
+    const ip = req.socket.remoteAddress;
+    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) {
+        return res.status(403).json({ ok: false, error: 'QR en prueba local. Falta habilitar acceso remoto autenticado.' });
+    }
+    next();
+});
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-app.set('supabase', supabase);
+let supabase = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+        supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+        app.set('supabase', supabase);
+    } catch (e) {
+        console.warn('⚠️ Supabase omitido:', e.message);
+    }
+}
 
 const openai = new OpenAI({ 
-    apiKey: process.env.OPENROUTER_API_KEY, 
+    apiKey: process.env.OPENROUTER_API_KEY || 'sk-or-v1-placeholder', 
     baseURL: 'https://openrouter.ai/api/v1' 
 });
 
@@ -438,27 +462,58 @@ app.post('/api/caj/whatsapp/mensaje', async (req, res) => {
     }
 });
 
+// ============================================================
+// RUTAS DE VINCULACIÓN WHATSAPP QR LIGERO (BAILEYS MULTISESIÓN)
+// ============================================================
+
+app.post('/api/caj/whatsapp/qr/reactivar', async (req, res) => {
+    try { res.json(await reactivarRecepcionCaso(req.body?.casoId)); }
+    catch (e) { res.status(400).json({ ok: false, error: e.message }); }
+});
+
+app.post('/api/caj/whatsapp/qr/iniciar', async (req, res) => {
+    try {
+        const { sessionId, nombre, telefono, id } = req.body || {};
+        const idSesion = sessionId || telefono || id || 'coordinador_carlos';
+        const estado = await iniciarSesionWhatsAppQR(idSesion, { nombre, telefono, id });
+        res.json(estado);
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+app.get('/api/caj/whatsapp/qr/estado/:sessionId', (req, res) => {
+    try {
+        const { sessionId } = req.params;
+        const estado = obtenerEstadoSesionQR(sessionId);
+        res.json(estado);
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+app.post('/api/caj/whatsapp/qr/desconectar', async (req, res) => {
+    try {
+        const { sessionId } = req.body || {};
+        const resultado = await desconectarSesionQR(sessionId || 'coordinador_carlos');
+        res.json(resultado);
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // Enlace directo de conveniencia a la interfaz
 app.get('/caj', (req, res) => {
     res.sendFile(path.join(__dirname, 'caj_dashboard.html'));
 });
 
-// Conector opcional para escaneo QR local (protegido para evitar caídas en la nube)
-if (!process.env.RENDER) {
-    try {
-        const { Client, LocalAuth } = require('whatsapp-web.js');
-        const qrcode = require('qrcode-terminal');
-        const clientWA = new Client({
-            authStrategy: new LocalAuth(),
-            puppeteer: { headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] }
-        });
-        clientWA.on('qr', (qr) => qrcode.generate(qr, { small: true }));
-        clientWA.on('ready', () => console.log('✅ WhatsApp QR local conectado.'));
-        clientWA.initialize().catch(() => {});
-    } catch (e) {
-        // En Render o si falta puppeteer se opera exclusivamente por Webhook
-    }
-}
-
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`));
+app.listen(PORT, '127.0.0.1', () => {
+    console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`);
+    // Auto-iniciar sesión QR principal del Coordinador si ya existen credenciales guardadas
+    iniciarSesionWhatsAppQR('coordinador_carlos', {
+        id: 'coordinador_carlos',
+        nombre: 'Carlos Rosas',
+        telefono: '+56957948583'
+    }).catch(() => {});
+});
