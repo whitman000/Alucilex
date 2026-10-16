@@ -28,7 +28,7 @@ const {
 
 const { generarInformeJuridico, confeccionarEscritoJudicial } = require('./motor_caj');
 const { analizarDocumento, guardarDocumentoEnCaso } = require('./procesador_documentos');
-const { procesarMensajeWhatsApp, iniciarSesionWhatsAppQR, obtenerEstadoSesionQR, desconectarSesionQR, reactivarRecepcionCaso } = require('./whatsapp_caj');
+const { iniciarSesion, obtenerEstadoSesion, desconectarSesion, enviarMensaje } = require('./whatsapp_caj');
 
 // Importar los bancos estáticos de Alucilex
 const bancoPreguntasAlucilex = require('./banco_preguntas.js');
@@ -405,78 +405,15 @@ app.post('/api/caj/auth/login', async (req, res) => {
 });
 
 // ============================================================
-// CANAL WHATSAPP: RECEPCIÓN 24/7 EN LA NUBE Y LOCAL
+// CANAL WHATSAPP: RECEPCIÓN 24/7 EN LA NUBE Y LOCAL (BAILEYS)
 // ============================================================
-
-// Webhook oficial de WhatsApp en la nube (Render)
-app.get('/api/caj/whatsapp/webhook', (req, res) => {
-    const modo = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const reto = req.query['hub.challenge'];
-
-    if (modo === 'subscribe' && token === 'alucilex_caj_token_seguro') {
-        return res.status(200).send(reto);
-    }
-    res.status(200).json({ ok: true, mensaje: 'Webhook CAJ activo en Render' });
-});
-
-app.post('/api/caj/whatsapp/webhook', async (req, res) => {
-    try {
-        const body = req.body;
-        let texto = body.texto || body.message || body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body;
-        let telefonoRemitente = body.telefonoRemitente || body.from || body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
-        let etiquetas = body.etiquetas || body.labels || ['CAJ - Recepción IA'];
-        let telefonoPostulante = body.telefonoPostulante || '+56957948583';
-
-        if (texto && telefonoRemitente) {
-            const resultado = await procesarMensajeWhatsApp(
-                texto,
-                telefonoRemitente,
-                telefonoPostulante,
-                etiquetas
-            );
-            return res.json({ ok: true, resultado });
-        }
-        res.json({ ok: true, mensaje: 'Evento procesado' });
-    } catch (error) {
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// Endpoint de prueba directa o simulación
-app.post('/api/caj/whatsapp/mensaje', async (req, res) => {
-    try {
-        const { texto, telefonoRemitente, telefonoPostulante, etiquetas } = req.body;
-        if (!texto || !telefonoRemitente) {
-            return res.status(400).json({ ok: false, error: 'Faltan parámetros requeridos (texto, telefonoRemitente)' });
-        }
-        const resultado = await procesarMensajeWhatsApp(
-            texto,
-            telefonoRemitente,
-            telefonoPostulante || '+56957948583',
-            etiquetas || []
-        );
-        res.json({ ok: true, resultado });
-    } catch (error) {
-        res.status(500).json({ ok: false, error: error.message });
-    }
-});
-
-// ============================================================
-// RUTAS DE VINCULACIÓN WHATSAPP QR LIGERO (BAILEYS MULTISESIÓN)
-// ============================================================
-
-app.post('/api/caj/whatsapp/qr/reactivar', async (req, res) => {
-    try { res.json(await reactivarRecepcionCaso(req.body?.casoId)); }
-    catch (e) { res.status(400).json({ ok: false, error: e.message }); }
-});
 
 app.post('/api/caj/whatsapp/qr/iniciar', async (req, res) => {
     try {
-        const { sessionId, nombre, telefono, id } = req.body || {};
-        const idSesion = sessionId || telefono || id || 'coordinador_carlos';
-        const estado = await iniciarSesionWhatsAppQR(idSesion, { nombre, telefono, id });
-        res.json(estado);
+        const { sessionId } = req.body;
+        const idSesion = sessionId || 'coordinador_carlos';
+        await iniciarSesion(idSesion);
+        res.json({ ok: true, mensaje: 'Iniciando sesión' });
     } catch (error) {
         res.status(500).json({ ok: false, error: error.message });
     }
@@ -485,7 +422,7 @@ app.post('/api/caj/whatsapp/qr/iniciar', async (req, res) => {
 app.get('/api/caj/whatsapp/qr/estado/:sessionId', (req, res) => {
     try {
         const { sessionId } = req.params;
-        const estado = obtenerEstadoSesionQR(sessionId);
+        const estado = obtenerEstadoSesion(sessionId);
         res.json(estado);
     } catch (error) {
         res.status(500).json({ ok: false, error: error.message });
@@ -494,9 +431,9 @@ app.get('/api/caj/whatsapp/qr/estado/:sessionId', (req, res) => {
 
 app.post('/api/caj/whatsapp/qr/desconectar', async (req, res) => {
     try {
-        const { sessionId } = req.body || {};
-        const resultado = await desconectarSesionQR(sessionId || 'coordinador_carlos');
-        res.json(resultado);
+        const { sessionId } = req.body;
+        const resultado = await desconectarSesion(sessionId || 'coordinador_carlos');
+        res.json({ ok: true, desconectado: resultado });
     } catch (error) {
         res.status(500).json({ ok: false, error: error.message });
     }
@@ -504,16 +441,13 @@ app.post('/api/caj/whatsapp/qr/desconectar', async (req, res) => {
 
 // Enlace directo de conveniencia a la interfaz
 app.get('/caj', (req, res) => {
-    res.sendFile(path.join(__dirname, 'caj_dashboard.html'));
+    res.sendFile(require('path').join(__dirname, 'caj_dashboard.html'));
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, '127.0.0.1', () => {
+// NOTA: Eliminamos '127.0.0.1' para que en Render (0.0.0.0) funcione correctamente
+app.listen(PORT, () => {
     console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`);
-    // Auto-iniciar sesión QR principal del Coordinador si ya existen credenciales guardadas
-    iniciarSesionWhatsAppQR('coordinador_carlos', {
-        id: 'coordinador_carlos',
-        nombre: 'Carlos Rosas',
-        telefono: '+56957948583'
-    }).catch(() => {});
+    // Auto-iniciar sesión QR principal del Coordinador al arrancar
+    iniciarSesion('coordinador_carlos').catch(() => {});
 });
