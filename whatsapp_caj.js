@@ -58,6 +58,37 @@ async function iniciarSesion(sessionId) {
         }
     });
 
+    // === NUEVO BLOQUE: OÍDO DEL SISTEMA (RECEPCIÓN DE MENSAJES) ===
+    sock.ev.on('messages.upsert', async (m) => {
+        const msg = m.messages[0];
+        
+        // Ignorar si el mensaje lo enviamos nosotros mismos o si no trae texto
+        if (!msg.message || msg.key.fromMe) return;
+
+        const senderJid = msg.key.remoteJid;
+        
+        // Ignorar mensajes de grupos, la IA solo responde en chats privados
+        if (senderJid.includes('@g.us')) return;
+
+        const numeroRemitente = senderJid.split('@')[0];
+        const textoEntrante = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+
+        if (!textoEntrante) return;
+
+        console.log(`[CAJ RECEPCIÓN] Mensaje recibido de ${numeroRemitente}: ${textoEntrante}`);
+
+        // TODO: Fase 2 - Conectar aquí con Firebase para verificar si el número está en la lista de "usuarios CAJ".
+        // Si está en la lista, pasar el texto a la IA. Si no está, ignorar.
+
+        // Por ahora, respondemos con un eco para comprobar que el oído funciona perfectamente:
+        try {
+            await sock.sendMessage(senderJid, { text: `🤖 Sistema AlucineLex: Acabo de leer tu mensaje ("${textoEntrante}"). Soy el motor escuchando. En la próxima fase validaré si estás en la lista CAJ para activar la Inteligencia Artificial.` });
+        } catch (error) {
+            console.error('Error respondiendo al mensaje:', error);
+        }
+    });
+    // ==============================================================
+
     sesiones.set(sessionId, sock);
     return sock;
 }
