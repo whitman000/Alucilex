@@ -59,10 +59,11 @@ async function iniciarSesion(sessionId) {
     });
 
     // === NUEVO BLOQUE: OÍDO DEL SISTEMA (RECEPCIÓN DE MENSAJES) ===
+    // === NUEVO BLOQUE: OÍDO DEL SISTEMA (RECEPCIÓN DE MENSAJES MEJORADO) ===
     sock.ev.on('messages.upsert', async (m) => {
         const msg = m.messages[0];
         
-        // Ignorar si el mensaje lo enviamos nosotros mismos o si no trae texto
+        // Ignorar si el mensaje lo enviamos nosotros mismos o si no trae contenido
         if (!msg.message || msg.key.fromMe) return;
 
         const senderJid = msg.key.remoteJid;
@@ -71,22 +72,29 @@ async function iniciarSesion(sessionId) {
         if (senderJid.includes('@g.us')) return;
 
         const numeroRemitente = senderJid.split('@')[0];
-        const textoEntrante = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+        
+        // Extracción a prueba de fallos (cubre normales, respuestas y temporales)
+        const msgContent = msg.message?.ephemeralMessage?.message || msg.message;
+        const textoEntrante = msgContent?.conversation || msgContent?.extendedTextMessage?.text || '';
 
-        if (!textoEntrante) return;
+        // Imprimir en consola el esqueleto del mensaje para diagnóstico
+        console.log(`\n[CAJ DEBUG] Mensaje detectado de ${numeroRemitente}. Estructura:`, Object.keys(msg.message));
 
-        console.log(`[CAJ RECEPCIÓN] Mensaje recibido de ${numeroRemitente}: ${textoEntrante}`);
+        if (!textoEntrante) {
+            console.log(`[CAJ DEBUG] El mensaje fue ignorado porque no contenía texto legible (imagen, audio, etc).`);
+            return;
+        }
 
-        // TODO: Fase 2 - Conectar aquí con Firebase para verificar si el número está en la lista de "usuarios CAJ".
-        // Si está en la lista, pasar el texto a la IA. Si no está, ignorar.
+        console.log(`[CAJ RECEPCIÓN] Texto limpio extraído: "${textoEntrante}"`);
 
-        // Por ahora, respondemos con un eco para comprobar que el oído funciona perfectamente:
+        // Respondemos con un eco para comprobar que el oído funciona perfectamente:
         try {
             await sock.sendMessage(senderJid, { text: `🤖 Sistema AlucineLex: Acabo de leer tu mensaje ("${textoEntrante}"). Soy el motor escuchando. En la próxima fase validaré si estás en la lista CAJ para activar la Inteligencia Artificial.` });
         } catch (error) {
             console.error('Error respondiendo al mensaje:', error);
         }
     });
+    
     // ==============================================================
 
     sesiones.set(sessionId, sock);
