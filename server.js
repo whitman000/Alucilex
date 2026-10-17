@@ -47,6 +47,11 @@ app.use((req, res, next) => {
     }
     next();
 });
+// === MARCAPASOS: REGISTRO DE PING EN RENDER ===
+app.get('/', (req, res) => {
+    console.log('💓 [MARCAPASOS] Latido recibido desde Google. Servidor 100% despierto.');
+    res.status(200).send('OK');
+});
 // Etapa de pruebas: el control QR solo se admite desde el computador del servidor.
 app.use('/api/caj/whatsapp/qr', (req, res, next) => {
     const ip = req.socket.remoteAddress;
