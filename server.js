@@ -446,6 +446,22 @@ app.get('/caj', (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 // NOTA: Eliminamos '127.0.0.1' para que en Render (0.0.0.0) funcione correctamente
+
+// Endpoint para enviar mensajes por WhatsApp CAJ
+app.post('/api/caj/whatsapp/enviar', async (req, res) => {
+    const { sessionId, numero, texto } = req.body;
+    if (!sessionId || !numero || !texto) {
+        return res.status(400).json({ ok: false, error: 'Faltan datos requeridos.' });
+    }
+    try {
+        const motorWa = require('./whatsapp_caj');
+        await motorWa.enviarMensaje(sessionId, numero, texto);
+        res.json({ ok: true, mensaje: 'Mensaje enviado correctamente' });
+    } catch (error) {
+        console.error('Error enviando WA:', error);
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
 app.listen(PORT, () => {
     console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`);
     // Auto-iniciar sesión QR principal del Coordinador al arrancar
