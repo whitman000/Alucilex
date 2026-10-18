@@ -508,6 +508,16 @@ const PORT = process.env.PORT || 3001;
 
 app.listen(PORT, () => {
     console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`);
-    // Auto-iniciar sesión QR principal del Coordinador al arrancar
-    iniciarSesion('coordinador_carlos').catch(() => {});
+
+    console.log('[CAJ WHATSAPP] Iniciando sesión coordinador_carlos');
+
+    iniciarSesion('coordinador_carlos')
+        .then(() => {
+            console.log('[CAJ WHATSAPP] Solicitud de inicio procesada. Esperando conexión de Baileys.');
+        })
+        .catch((error) => {
+            console.error('[CAJ WHATSAPP] ERROR AL INICIAR BAILEYS');
+            console.error('Mensaje:', error.message);
+            console.error('Código:', error.code || 'SIN_CODIGO');
+        });
 });
