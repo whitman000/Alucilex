@@ -28,7 +28,13 @@ const {
 
 const { generarInformeJuridico, confeccionarEscritoJudicial } = require('./motor_caj');
 const { analizarDocumento, guardarDocumentoEnCaso } = require('./procesador_documentos');
-const { iniciarSesion, obtenerEstadoSesion, desconectarSesion, enviarMensaje } = require('./whatsapp_caj');
+const {
+    iniciarSesion,
+    obtenerEstadoSesion,
+    desconectarSesion,
+    enviarMensaje,
+    activarIAEnChat
+} = require('./whatsapp_caj');
 
 // Importar los bancos estáticos de Alucilex
 const bancoPreguntasAlucilex = require('./banco_preguntas.js');
@@ -37,6 +43,7 @@ const bancoArticulosAlucilex = require('./banco_articulos.js');
 const app = express();
 app.use(cors());
 app.use(express.json());
+
 // Servir únicamente archivos públicos conocidos; nunca credenciales ni sesiones.
 const archivosPublicos = new Set([
     '/alucilex.html', '/caj_dashboard.html', '/escrituras.html', '/motor_escrituras.js', '/privacidad.html'
@@ -47,15 +54,21 @@ app.use((req, res, next) => {
     }
     next();
 });
+
 // === MARCAPASOS: REGISTRO DE PING EN RENDER ===
 app.get('/', (req, res) => {
     console.log('💓 [MARCAPASOS] Latido recibido desde Google. Servidor 100% despierto.');
     res.status(200).send('OK');
 });
-// Etapa de pruebas: el control QR solo se admite desde el computador del servidor.
+
+app.get('/ping', (req, res) => {
+    res.status(200).send('OK');
+});
+
+// Etapa de pruebas: el control QR solo se admite desde el computador del servidor o entorno autorizado.
 app.use('/api/caj/whatsapp/qr', (req, res, next) => {
     const ip = req.socket.remoteAddress;
-    if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) {
+    if (process.env.ALLOW_REMOTE_QR !== 'true' && !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip)) {
         return res.status(403).json({ ok: false, error: 'QR en prueba local. Falta habilitar acceso remoto autenticado.' });
     }
     next();
@@ -71,9 +84,14 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
     }
 }
 
+// Cliente OpenRouter con headers requeridos para activar la IA en producción
 const openai = new OpenAI({ 
     apiKey: process.env.OPENROUTER_API_KEY || 'sk-or-v1-placeholder', 
-    baseURL: 'https://openrouter.ai/api/v1' 
+    baseURL: 'https://openrouter.ai/api/v1',
+    defaultHeaders: {
+        'HTTP-Referer': process.env.RENDER_EXTERNAL_URL || 'https://alucilex.onrender.com',
+        'X-Title': 'Alucilex - Consultor Juridico y CAJ'
+    }
 });
 
 const cacheRespuestas = new Map();
@@ -257,10 +275,14 @@ app.get('/api/caj/casos', async (req, res) => {
     }
 });
 
-// 2. Ingresar nueva causa anclada al RUT maestro
+// 2. Ingresar nueva causa anclada al RUT maestro (y habilitar en lista IA si trae teléfono)
 app.post('/api/caj/nuevo', async (req, res) => {
     try {
         const resultado = await guardarCaso(req.body);
+        const fono = req.body.telefono || req.body.telefono_contacto || req.body.usuario?.telefono;
+        if (fono && req.body.activar_ia_whatsapp !== false) {
+            await activarIAEnChat(req.body.sessionId || 'coordinador_carlos', fono, true, false).catch(() => {});
+        }
         console.log(`✅ Causa procesada con éxito (ID: ${resultado.id})`);
         res.json({ ok: true, id: resultado.id, caso: resultado });
     } catch (error) {
@@ -273,6 +295,10 @@ app.post('/api/caj/nuevo', async (req, res) => {
 app.post('/api/caj/caso', async (req, res) => {
     try {
         const resultado = await guardarCaso(req.body);
+        const fono = req.body.telefono || req.body.telefono_contacto || req.body.usuario?.telefono;
+        if (fono && req.body.activar_ia_whatsapp !== false) {
+            await activarIAEnChat(req.body.sessionId || 'coordinador_carlos', fono, true, false).catch(() => {});
+        }
         res.json({ ok: true, caso: resultado, id: resultado.id });
     } catch (e) {
         res.status(500).json({ ok: false, error: e.message });
@@ -444,29 +470,42 @@ app.post('/api/caj/whatsapp/qr/desconectar', async (req, res) => {
     }
 });
 
-// Enlace directo de conveniencia a la interfaz
-app.get('/caj', (req, res) => {
-    res.sendFile(require('path').join(__dirname, 'caj_dashboard.html'));
-});
-
-const PORT = process.env.PORT || 3001;
-// NOTA: Eliminamos '127.0.0.1' para que en Render (0.0.0.0) funcione correctamente
-
-// Endpoint para enviar mensajes por WhatsApp CAJ
+// Endpoint para enviar mensajes manuales por WhatsApp CAJ (pausa la IA y registra en Firebase)
 app.post('/api/caj/whatsapp/enviar', async (req, res) => {
     const { sessionId, numero, texto } = req.body;
     if (!sessionId || !numero || !texto) {
         return res.status(400).json({ ok: false, error: 'Faltan datos requeridos.' });
     }
     try {
-        const motorWa = require('./whatsapp_caj');
-        await motorWa.enviarMensaje(sessionId, numero, texto);
+        await enviarMensaje(sessionId, numero, texto);
         res.json({ ok: true, mensaje: 'Mensaje enviado correctamente' });
     } catch (error) {
         console.error('Error enviando WA:', error);
         res.status(500).json({ ok: false, error: error.message });
     }
 });
+
+// Endpoint para que el asesor active/reactive la IA en un chat específico desde la lista CAJ
+app.post('/api/caj/whatsapp/ia/activar', async (req, res) => {
+    const { sessionId, numero, activar = true, dispararSaludo = true } = req.body;
+    if (!numero) {
+        return res.status(400).json({ ok: false, error: 'Debe indicar el número de teléfono del cliente.' });
+    }
+    try {
+        const estado = await activarIAEnChat(sessionId || 'coordinador_carlos', numero, activar, dispararSaludo);
+        res.json({ ok: true, estado });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Enlace directo de conveniencia a la interfaz
+app.get('/caj', (req, res) => {
+    res.sendFile(path.join(__dirname, 'caj_dashboard.html'));
+});
+
+const PORT = process.env.PORT || 3001;
+
 app.listen(PORT, () => {
     console.log(`Servidor ALUCILEX Blindado y Sincronizado en puerto ${PORT}`);
     // Auto-iniciar sesión QR principal del Coordinador al arrancar
