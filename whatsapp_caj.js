@@ -4,7 +4,8 @@
 const {
     default: makeWASocket,
     useMultiFileAuthState,
-    DisconnectReason
+    DisconnectReason,
+    downloadMediaMessage
 } = require('@whiskeysockets/baileys');
 
 const qrcode = require('qrcode');
@@ -27,6 +28,9 @@ const {
 const {
     analizarMensajeWhatsAppCAJ
 } = require('./motor_caj');
+const {
+    transcribirAudioCAJ
+} = require('./transcribir_audio_caj');
 
 // ============================================================
 // ADMINISTRACION INDEPENDIENTE DE SESIONES
@@ -744,10 +748,92 @@ async function crearSesionBaileys(sessionId, generacion) {
 
             const fromMe = Boolean(msg.key.fromMe);
 
-            const {
+            let {
                 texto: textoEntrante,
                 tipo
             } = extraerTextoMensaje(msg);
+
+            // ====================================================
+            // TRANSCRIPCION DE AUDIOS DE CLIENTES CAJ
+            // ====================================================
+
+            const contenidoMensaje =
+                msg.message?.ephemeralMessage?.message ||
+                msg.message?.viewOnceMessage?.message ||
+                msg.message?.viewOnceMessageV2?.message ||
+                msg.message;
+
+            const esAudio =
+                Boolean(contenidoMensaje?.audioMessage);
+
+            if (esAudio && !fromMe && control.permitido(senderJid)) {
+                try {
+                    console.log(
+                        `[CAJ AUDIO] Audio recibido de cliente: ${senderJid}`
+                    );
+
+                    const audioBuffer = await downloadMediaMessage(
+                        msg,
+                        'buffer',
+                        {},
+                        {
+                            logger: pino({ level: 'silent' }),
+                            reuploadRequest: sock.updateMediaMessage.bind(sock)
+                        }
+                    );
+
+                    if (!vigente()) return;
+
+                    if (audioBuffer.length > 15 * 1024 * 1024) {
+                        throw new Error(
+                            'Audio superior al limite permitido de 15 MB'
+                        );
+                    }
+
+                    const mime =
+                        contenidoMensaje.audioMessage.mimetype || '';
+
+                    let formato = 'ogg';
+
+                    if (mime.includes('mpeg')) {
+                        formato = 'mp3';
+                    } else if (mime.includes('mp4')) {
+                        formato = 'm4a';
+                    } else if (mime.includes('wav')) {
+                        formato = 'wav';
+                    } else if (mime.includes('webm')) {
+                        formato = 'webm';
+                    }
+
+                    const transcripcion = await transcribirAudioCAJ(
+                        audioBuffer,
+                        formato
+                    );
+
+                    if (!vigente()) return;
+
+                    textoEntrante =
+                        `[TRANSCRIPCION DE AUDIO WHATSAPP]\n${transcripcion}`;
+
+                    tipo = 'texto';
+
+                    console.log(
+                        `[CAJ AUDIO] Transcripcion completada para ${senderJid}`
+                    );
+
+                } catch (error) {
+                    console.error(
+                        `[CAJ AUDIO] Error procesando audio de ${senderJid}:`,
+                        error.response?.data?.error?.message ||
+                        error.message
+                    );
+
+                    // Se mantiene como multimedia sin transcribir.
+                    // El controlador la marcara pendiente de revision.
+                    textoEntrante = '';
+                    tipo = 'multimedia';
+                }
+            }
 
             const timestampBot =
                 envioBotReciente.get(senderJid) || 0;
