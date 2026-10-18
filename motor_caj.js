@@ -176,8 +176,18 @@ Devuelve únicamente el JSON solicitado.`;
             datos_extraidos: datosExtraidos,
             respuesta_humana: respuestaConPlantilla
         };
-    } catch (error) {
-        console.error('⚠️ Error en analizarMensajeWhatsAppCAJ (usando respaldo determinista):', error.message);
+        } catch (error) {
+        const estadoHTTP = error.response?.status || null;
+        const codigoError = error.response?.data?.error?.code || error.code || 'SIN_CODIGO';
+        const detalleError = error.response?.data?.error?.message || error.message;
+
+        console.error('❌ [ALUCILEX CAJ] FALLO DE INTELIGENCIA ARTIFICIAL');
+        console.error('Proveedor: OpenRouter');
+        console.error('Modelo configurado:', MODELO);
+        console.error('Estado HTTP:', estadoHTTP);
+        console.error('Código del error:', codigoError);
+        console.error('Descripción:', detalleError);
+        console.error('Se utilizará la respuesta alternativa mientras se diagnostica el fallo.');
         const hechosRespaldo = Array.isArray(baseHeuristica.hechos) ? [...baseHeuristica.hechos] : [];
         if (texto && texto !== '[INICIO_ATENCION_CAJ]') {
             hechosRespaldo.push(`${delAsesor ? '[Asesor] ' : ''}${texto}`);

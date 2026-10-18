@@ -13,7 +13,7 @@ const ETIQUETAS_CAJ = Object.freeze({
 });
 
 const normalizar = valor => String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
-const nombresPermitidos = () => (process.env.CAJ_ETIQUETAS_HABILITADAS || `${ETIQUETAS_CAJ.USUARIO}|${ETIQUETAS_CAJ.RECEPCION_IA}`).split('|').map(normalizar);
+const nombresPermitidos = () => (process.env.ALUCILEXETIQUETASCAJ || process.env.CAJ_ETIQUETAS_HABILITADAS || `${ETIQUETAS_CAJ.USUARIO}|${ETIQUETAS_CAJ.RECEPCION_IA}`).split('|').map(normalizar);
 
 function evaluarAccesoPorEtiquetas(etiquetas = []) {
     const permitirIA = etiquetas.some(e => nombresPermitidos().includes(normalizar(typeof e === 'string' ? e : e.name)));
