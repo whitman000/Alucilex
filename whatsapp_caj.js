@@ -1,20 +1,55 @@
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+
+'use strict';
+
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason
+} = require('@whiskeysockets/baileys');
+
 const qrcode = require('qrcode');
 const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const { crearControlConversaciones, ETIQUETAS_CAJ } = require('./control_conversaciones_caj');
-const { crearRepositorioWhatsAppFirebase, obtenerAsesorActivoCAJ, normalizarTelefono } = require('./firebase_caj');
-const { analizarMensajeWhatsAppCAJ } = require('./motor_caj');
+const {
+    crearControlConversaciones,
+    ETIQUETAS_CAJ
+} = require('./control_conversaciones_caj');
+
+const {
+    crearRepositorioWhatsAppFirebase,
+    obtenerAsesorActivoCAJ,
+    normalizarTelefono
+} = require('./firebase_caj');
+
+const {
+    analizarMensajeWhatsAppCAJ
+} = require('./motor_caj');
+
+// ============================================================
+// ADMINISTRACION INDEPENDIENTE DE SESIONES
+// ============================================================
 
 const sesiones = new Map();
 const estados = new Map();
 const controles = new Map();
+
+const iniciosPendientes = new Map();
+const reconexionesPendientes = new Map();
+const desconexionesPendientes = new Map();
+const sesionesDetenidas = new Set();
+const generaciones = new Map();
+const conflictosConsecutivos = new Map();
+
 const idsEnviadosPorBot = new Set();
 const envioBotReciente = new Map();
 const ultimosMensajesCliente = new Map();
+
+const MAX_CONFLICTOS = 5;
+const DEMORA_NORMAL = 10000;
+const DEMORA_CONFLICTO = 30000;
 
 const authDir = path.join(__dirname, 'auth_caj');
 
@@ -22,118 +57,339 @@ if (!fs.existsSync(authDir)) {
     fs.mkdirSync(authDir, { recursive: true });
 }
 
+// ============================================================
+// IDENTIFICACION Y CONTROL DE CONEXIONES
+// ============================================================
+
+function generacionActual(sessionId) {
+    return generaciones.get(sessionId) || 0;
+}
+
+function incrementarGeneracion(sessionId) {
+    const siguiente = generacionActual(sessionId) + 1;
+    generaciones.set(sessionId, siguiente);
+    return siguiente;
+}
+
+function cancelarReconexiones(sessionId) {
+    const temporizador = reconexionesPendientes.get(sessionId);
+
+    if (temporizador) {
+        clearTimeout(temporizador);
+    }
+
+    reconexionesPendientes.delete(sessionId);
+}
+
+function registrarIdMensajeBot(id) {
+    if (!id) return;
+
+    idsEnviadosPorBot.add(String(id));
+
+    if (idsEnviadosPorBot.size > 3000) {
+        idsEnviadosPorBot.delete(
+            idsEnviadosPorBot.values().next().value
+        );
+    }
+}
+
+function formatearJid(numeroOJid) {
+    const valor = String(numeroOJid || '').trim();
+
+    if (valor.endsWith('@s.whatsapp.net')) {
+        return valor;
+    }
+
+    const numero = normalizarTelefono(valor);
+
+    return numero ? `${numero}@s.whatsapp.net` : '';
+}
+
+// ============================================================
+// ETIQUETAS DE WHATSAPP BUSINESS
+// ============================================================
+
 function rutaEtiquetasSesion(sessionId) {
-    return path.join(authDir, `etiquetas_${sessionId}.json`);
+    return path.join(
+        authDir,
+        `etiquetas_${sessionId}.json`
+    );
 }
 
 function cargarEtiquetasGuardadas(sessionId) {
     try {
         const archivo = rutaEtiquetasSesion(sessionId);
+
         if (fs.existsSync(archivo)) {
-            return JSON.parse(fs.readFileSync(archivo, 'utf8'));
+            return JSON.parse(
+                fs.readFileSync(archivo, 'utf8')
+            );
         }
-    } catch (e) {
-        console.warn(`⚠️ No se pudieron leer etiquetas locales de ${sessionId}:`, e.message);
+    } catch (error) {
+        console.warn(
+            '[CAJ] Error leyendo etiquetas:',
+            error.message
+        );
     }
+
     return [];
 }
 
 function guardarEtiquetasSesion(sessionId, listaEtiquetas) {
     try {
         const archivo = rutaEtiquetasSesion(sessionId);
-        fs.writeFileSync(archivo, JSON.stringify(listaEtiquetas, null, 2), 'utf8');
-    } catch (e) {
-        console.warn(`⚠️ No se pudieron guardar etiquetas locales de ${sessionId}:`, e.message);
+
+        fs.writeFileSync(
+            archivo,
+            JSON.stringify(listaEtiquetas, null, 2),
+            'utf8'
+        );
+    } catch (error) {
+        console.warn(
+            '[CAJ] Error guardando etiquetas:',
+            error.message
+        );
     }
 }
 
-function registrarIdMensajeBot(id) {
-    if (!id) return;
-    idsEnviadosPorBot.add(String(id));
-    if (idsEnviadosPorBot.size > 3000) {
-        idsEnviadosPorBot.delete(idsEnviadosPorBot.values().next().value);
-    }
-}
-
-function formatearJid(numeroOJid) {
-    const str = String(numeroOJid || '').trim();
-    if (str.endsWith('@s.whatsapp.net')) return str;
-    const limpio = normalizarTelefono(str);
-    return limpio ? `${limpio}@s.whatsapp.net` : '';
-}
+// ============================================================
+// EXTRACCION DE MENSAJES
+// ============================================================
 
 function extraerTextoMensaje(msg) {
-    if (!msg || !msg.message) return { texto: '', tipo: 'desconocido' };
-    const m = msg.message?.ephemeralMessage?.message
-        || msg.message?.viewOnceMessage?.message
-        || msg.message?.viewOnceMessageV2?.message
-        || msg.message;
+    if (!msg || !msg.message) {
+        return {
+            texto: '',
+            tipo: 'desconocido'
+        };
+    }
 
-    if (typeof m.conversation === 'string' && m.conversation.trim()) {
-        return { texto: m.conversation.trim(), tipo: 'texto' };
+    const m =
+        msg.message?.ephemeralMessage?.message ||
+        msg.message?.viewOnceMessage?.message ||
+        msg.message?.viewOnceMessageV2?.message ||
+        msg.message;
+
+    if (
+        typeof m.conversation === 'string' &&
+        m.conversation.trim()
+    ) {
+        return {
+            texto: m.conversation.trim(),
+            tipo: 'texto'
+        };
     }
-    if (typeof m.extendedTextMessage?.text === 'string' && m.extendedTextMessage.text.trim()) {
-        return { texto: m.extendedTextMessage.text.trim(), tipo: 'texto' };
+
+    if (
+        typeof m.extendedTextMessage?.text === 'string' &&
+        m.extendedTextMessage.text.trim()
+    ) {
+        return {
+            texto: m.extendedTextMessage.text.trim(),
+            tipo: 'texto'
+        };
     }
-    if (typeof m.imageMessage?.caption === 'string' && m.imageMessage.caption.trim()) {
-        return { texto: m.imageMessage.caption.trim(), tipo: 'texto' };
+
+    if (
+        typeof m.imageMessage?.caption === 'string' &&
+        m.imageMessage.caption.trim()
+    ) {
+        return {
+            texto: m.imageMessage.caption.trim(),
+            tipo: 'texto'
+        };
     }
-    if (typeof m.documentMessage?.caption === 'string' && m.documentMessage.caption.trim()) {
-        return { texto: m.documentMessage.caption.trim(), tipo: 'texto' };
+
+    if (
+        typeof m.documentMessage?.caption === 'string' &&
+        m.documentMessage.caption.trim()
+    ) {
+        return {
+            texto: m.documentMessage.caption.trim(),
+            tipo: 'texto'
+        };
     }
-    if (m.imageMessage || m.documentMessage || m.audioMessage || m.videoMessage) {
-        return { texto: '', tipo: 'multimedia' };
+
+    if (
+        m.imageMessage ||
+        m.documentMessage ||
+        m.audioMessage ||
+        m.videoMessage
+    ) {
+        return {
+            texto: '',
+            tipo: 'multimedia'
+        };
     }
-    return { texto: '', tipo: 'desconocido' };
+
+    return {
+        texto: '',
+        tipo: 'desconocido'
+    };
 }
 
+// ============================================================
+// CONTROL DE CONVERSACIONES Y FIREBASE
+// ============================================================
+
 function obtenerOCrearControl(sessionId) {
-    if (controles.has(sessionId)) return controles.get(sessionId);
+    if (controles.has(sessionId)) {
+        return controles.get(sessionId);
+    }
 
     const repo = crearRepositorioWhatsAppFirebase({
         sessionId,
+
         obtenerAsesor: async () => {
             const sock = sesiones.get(sessionId);
-            const fonoSesion = sock?.user?.id ? normalizarTelefono(sock.user.id.split(':')[0]) : '';
-            return obtenerAsesorActivoCAJ(sessionId, fonoSesion);
+
+            const telefono = sock?.user?.id
+                ? normalizarTelefono(
+                    sock.user.id.split(':')[0]
+                )
+                : '';
+
+            return obtenerAsesorActivoCAJ(
+                sessionId,
+                telefono
+            );
         }
     });
 
     const control = crearControlConversaciones({
         repo,
+
         analizar: analizarMensajeWhatsAppCAJ,
+
         enviar: async (jid, respuesta, idSalida) => {
             const sock = sesiones.get(sessionId);
-            if (!sock) throw new Error(`Sesión de WhatsApp '${sessionId}' no conectada`);
+
+            if (
+                !sock ||
+                estados.get(sessionId)?.estado !== 'conectado'
+            ) {
+                throw new Error(
+                    `Sesion ${sessionId} no conectada`
+                );
+            }
 
             registrarIdMensajeBot(idSalida);
-            envioBotReciente.set(jid, Date.now());
 
-            const enviado = await sock.sendMessage(jid, { text: respuesta });
+            envioBotReciente.set(
+                jid,
+                Date.now()
+            );
+
+            const enviado = await sock.sendMessage(
+                jid,
+                { text: respuesta }
+            );
+
             const idReal = enviado?.key?.id;
+
             if (idReal) {
                 registrarIdMensajeBot(idReal);
                 control.registrarIdPropio(idReal);
             }
+
             return idReal || idSalida;
         }
     });
 
     const guardadas = cargarEtiquetasGuardadas(sessionId);
+
     if (guardadas.length > 0) {
         control.cargarNombres(guardadas);
     }
 
     controles.set(sessionId, control);
+
     return control;
 }
 
-async function iniciarSesion(sessionId = 'coordinador_carlos') {
+// ============================================================
+// INICIO PROTEGIDO DE SESIONES BAILEYS
+// ============================================================
+
+async function iniciarSesion(
+    sessionId = 'coordinador_carlos',
+    automatico = false
+) {
+    if (desconexionesPendientes.has(sessionId)) {
+        throw new Error(
+            `Sesion ${sessionId} en proceso de desvinculacion`
+        );
+    }
+
+    if (automatico && sesionesDetenidas.has(sessionId)) {
+        return null;
+    }
+
+    if (!automatico) {
+        sesionesDetenidas.delete(sessionId);
+        conflictosConsecutivos.delete(sessionId);
+    }
+
+    const existente = sesiones.get(sessionId);
+
+    if (existente) {
+        return existente;
+    }
+
+    const pendiente = iniciosPendientes.get(sessionId);
+
+    if (pendiente) {
+        return pendiente;
+    }
+
+    cancelarReconexiones(sessionId);
+
+    const generacion = generacionActual(sessionId);
+
+    const inicio = crearSesionBaileys(
+        sessionId,
+        generacion
+    );
+
+    iniciosPendientes.set(
+        sessionId,
+        inicio
+    );
+
+    try {
+        return await inicio;
+    } finally {
+        if (iniciosPendientes.get(sessionId) === inicio) {
+            iniciosPendientes.delete(sessionId);
+        }
+    }
+}
+
+async function crearSesionBaileys(sessionId, generacion) {
     const folder = path.join(authDir, sessionId);
-    const { state, saveCreds } = await useMultiFileAuthState(folder);
+
+    const {
+        state,
+        saveCreds
+    } = await useMultiFileAuthState(folder);
+
+    if (
+        sesionesDetenidas.has(sessionId) ||
+        generacionActual(sessionId) !== generacion
+    ) {
+        console.log(
+            `[CAJ BAILEYS] Inicio cancelado: ${sessionId}`
+        );
+
+        return null;
+    }
+
     const control = obtenerOCrearControl(sessionId);
 
-    estados.set(sessionId, { estado: 'iniciando', qr: null });
+    estados.set(sessionId, {
+        estado: 'iniciando',
+        qr: null
+    });
 
     const sock = makeWASocket({
         auth: state,
@@ -142,90 +398,300 @@ async function iniciarSesion(sessionId = 'coordinador_carlos') {
         syncFullHistory: false
     });
 
-    sock.ev.on('creds.update', saveCreds);
+    function vigente() {
+        return (
+            sesiones.get(sessionId) === sock &&
+            generacionActual(sessionId) === generacion &&
+            !sesionesDetenidas.has(sessionId)
+        );
+    }
+
+    // ========================================================
+    // GUARDADO DE CREDENCIALES
+    // ========================================================
+
+    sock.ev.on('creds.update', async () => {
+        if (!vigente()) return;
+
+        try {
+            await saveCreds();
+        } catch (error) {
+            console.error(
+                '[CAJ BAILEYS] Error guardando credenciales:',
+                error.message
+            );
+        }
+    });
+
+    // ========================================================
+    // EVENTOS DE CONEXION
+    // ========================================================
 
     sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
+        const {
+            connection,
+            lastDisconnect,
+            qr
+        } = update;
+
+        if (!vigente()) return;
 
         if (qr) {
             try {
                 const qrDataUrl = await qrcode.toDataURL(qr);
-                estados.set(sessionId, { estado: 'qr_listo', qr: qrDataUrl });
+
+                if (vigente()) {
+                    estados.set(sessionId, {
+                        estado: 'qr_listo',
+                        qr: qrDataUrl
+                    });
+                }
             } catch (error) {
-                console.error(`Error generando QR para ${sessionId}:`, error);
+                console.error(
+                    '[CAJ BAILEYS] Error generando QR:',
+                    error.message
+                );
             }
         }
 
-         if (connection === 'close') {
-            const codigoDesconexion = lastDisconnect?.error?.output?.statusCode;
-            const motivoDesconexion = lastDisconnect?.error?.message || 'Motivo no informado';
+        if (connection === 'close') {
+            if (!vigente()) return;
 
-            console.error('[CAJ BAILEYS] CONEXION CERRADA');
-            console.error('[CAJ BAILEYS] Sesion:', sessionId);
-            console.error('[CAJ BAILEYS] Codigo:', codigoDesconexion);
-            console.error('[CAJ BAILEYS] Motivo:', motivoDesconexion);
+            const codigo =
+                lastDisconnect?.error?.output?.statusCode;
+
+            const motivo =
+                lastDisconnect?.error?.message ||
+                'Motivo desconocido';
+
+            console.error(
+                `[CAJ BAILEYS] Conexion cerrada: ${sessionId}`
+            );
+
+            console.error(
+                '[CAJ BAILEYS] Codigo:',
+                codigo
+            );
+
+            console.error(
+                '[CAJ BAILEYS] Motivo:',
+                motivo
+            );
 
             control.conectar(false);
-            const shouldReconnect = (codigoDesconexion !== DisconnectReason.loggedOut);
 
-            if (shouldReconnect) {
-                estados.set(sessionId, { estado: 'reconectando', qr: null });
-                iniciarSesion(sessionId);
-            } else {
-                estados.set(sessionId, { estado: 'desconectado', qr: null });
-                sesiones.delete(sessionId);
-                if (fs.existsSync(folder)) {
-                    fs.rmSync(folder, { recursive: true, force: true });
-                }
+            sesiones.delete(sessionId);
+
+            incrementarGeneracion(sessionId);
+
+            if (codigo === DisconnectReason.loggedOut) {
+                sesionesDetenidas.add(sessionId);
+
+                cancelarReconexiones(sessionId);
+
+                estados.set(sessionId, {
+                    estado: 'desconectado',
+                    qr: null
+                });
+
+                return;
             }
-        } else if (connection === 'open') {
+
+            const conflictos = codigo === 440
+                ? (conflictosConsecutivos.get(sessionId) || 0) + 1
+                : 0;
+
+            conflictosConsecutivos.set(
+                sessionId,
+                conflictos
+            );
+
+            if (conflictos >= MAX_CONFLICTOS) {
+                sesionesDetenidas.add(sessionId);
+
+                cancelarReconexiones(sessionId);
+
+                estados.set(sessionId, {
+                    estado: 'conflicto',
+                    qr: null
+                });
+
+                console.error(
+                    `[CAJ BAILEYS] Sesion ${sessionId} suspendida tras ${conflictos} conflictos 440`
+                );
+
+                return;
+            }
+
+            estados.set(sessionId, {
+                estado: 'reconectando',
+                qr: null
+            });
+
+            cancelarReconexiones(sessionId);
+
+            const generacionReconexion =
+                generacionActual(sessionId);
+
+            const demora = codigo === 440
+                ? DEMORA_CONFLICTO * conflictos
+                : DEMORA_NORMAL;
+
+            const temporizador = setTimeout(() => {
+                if (
+                    reconexionesPendientes.get(sessionId) !==
+                    temporizador
+                ) {
+                    return;
+                }
+
+                reconexionesPendientes.delete(sessionId);
+
+                if (
+                    sesionesDetenidas.has(sessionId) ||
+                    sesiones.has(sessionId) ||
+                    generacionActual(sessionId) !==
+                        generacionReconexion
+                ) {
+                    return;
+                }
+
+                iniciarSesion(sessionId, true).catch(error => {
+                    console.error(
+                        `[CAJ BAILEYS] Error reconectando ${sessionId}:`,
+                        error.message
+                    );
+                });
+            }, demora);
+
+            reconexionesPendientes.set(
+                sessionId,
+                temporizador
+            );
+        }
+
+        if (connection === 'open') {
+            if (!vigente()) return;
+
             control.conectar(true);
-            estados.set(sessionId, { estado: 'conectado', qr: null });
-            console.log(`✅ WhatsApp conectado exitosamente para sesión: ${sessionId}`);
+
+            estados.set(sessionId, {
+                estado: 'conectado',
+                qr: null
+            });
+
+            console.log(
+                `WhatsApp conectado exitosamente para sesion: ${sessionId}`
+            );
+
+            setTimeout(() => {
+                if (vigente()) {
+                    conflictosConsecutivos.delete(sessionId);
+                }
+            }, 60000);
         }
     });
 
-    // === 1. SINCRONIZACIÓN DE DEFINICIONES DE ETIQUETAS (WhatsApp Business) ===
+    // ========================================================
+    // DEFINICIONES DE ETIQUETAS WHATSAPP BUSINESS
+    // ========================================================
+
     sock.ev.on('labels.edit', (payload) => {
-        const lista = Array.isArray(payload) ? payload : [payload];
+        if (!vigente()) return;
+
+        const lista = Array.isArray(payload)
+            ? payload
+            : [payload];
+
         for (const item of lista) {
             if (item && item.id !== undefined) {
-                console.log(`🏷️ [CAJ ETIQUETA DEFINIDA] ID: ${item.id} -> "${item.name}" (eliminada: ${Boolean(item.deleted)})`);
                 control.editarEtiqueta(item);
+
+                console.log(
+                    `[CAJ ETIQUETA] ${item.id}: ${item.name}`
+                );
             }
         }
-        guardarEtiquetasSesion(sessionId, control.obtenerEtiquetas());
+
+        guardarEtiquetasSesion(
+            sessionId,
+            control.obtenerEtiquetas()
+        );
     });
 
-    // === 2. ASOCIACIÓN DE ETIQUETAS EN EL TELÉFONO DEL ASESOR ===
-    // En el momento en que el asesor etiqueta el chat en su teléfono, la IA toma el control.
+    // ========================================================
+    // ASOCIACION DE ETIQUETAS A CLIENTES
+    // ========================================================
+
     sock.ev.on('labels.association', async (payload) => {
-        const eventos = Array.isArray(payload) ? payload : [payload];
-        for (const ev of eventos) {
-            const assoc = ev?.association;
-            const tipoAccion = ev?.type;
-            if (!assoc || assoc.type !== 'label_jid') continue;
+        if (!vigente()) return;
 
-            const chatId = assoc.chatId;
-            const labelId = String(assoc.labelId);
+        const eventos = Array.isArray(payload)
+            ? payload
+            : [payload];
 
-            // Si WhatsApp Business no envió previamente labels.edit para este ID en esta sesión,
-            // lo registramos por defecto como etiqueta habilitada CAJ al momento de agregarla.
-            const conocidas = control.obtenerEtiquetas();
-            if (tipoAccion === 'add' && !conocidas.some(e => String(e.id) === labelId)) {
-                control.editarEtiqueta({ id: labelId, name: ETIQUETAS_CAJ.RECEPCION_IA });
-                guardarEtiquetasSesion(sessionId, control.obtenerEtiquetas());
+        for (const evento of eventos) {
+            if (!vigente()) return;
+
+            const association = evento?.association;
+
+            if (
+                !association ||
+                association.type !== 'label_jid'
+            ) {
+                continue;
             }
 
-            await control.asociarEtiqueta({ type: tipoAccion, association: assoc });
-            console.log(`🏷️ [CAJ ETIQUETA EN CHAT] Acción: ${tipoAccion} | Chat: ${chatId} | Etiqueta: ${labelId} | IA Permitida: ${control.permitido(chatId)}`);
+            const chatId = association.chatId;
+            const labelId = String(association.labelId);
+            const tipoAccion = evento.type;
 
-            // Si el asesor acaba de etiquetar el chat y la IA quedó habilitada, toma el control de inmediato:
-            if (tipoAccion === 'add' && control.permitido(chatId)) {
-                const pendiente = ultimosMensajesCliente.get(chatId);
+            const conocidas = control.obtenerEtiquetas();
+
+            if (
+                tipoAccion === 'add' &&
+                !conocidas.some(
+                    etiqueta => String(etiqueta.id) === labelId
+                )
+            ) {
+                control.editarEtiqueta({
+                    id: labelId,
+                    name: ETIQUETAS_CAJ.RECEPCION_IA
+                });
+
+                guardarEtiquetasSesion(
+                    sessionId,
+                    control.obtenerEtiquetas()
+                );
+            }
+
+            await control.asociarEtiqueta({
+                type: tipoAccion,
+                association
+            });
+
+            if (!vigente()) return;
+
+            console.log(
+                `[CAJ ETIQUETA] Chat: ${chatId} | IA: ${control.permitido(chatId)}`
+            );
+
+            if (
+                tipoAccion === 'add' &&
+                control.permitido(chatId)
+            ) {
+                const pendiente =
+                    ultimosMensajesCliente.get(chatId);
+
                 if (pendiente) {
                     ultimosMensajesCliente.delete(chatId);
-                    await control.recibir(pendiente).catch(err => console.error('Error al procesar mensaje pendiente tras etiquetar:', err.message));
+
+                    await control.recibir(pendiente).catch(
+                        error => console.error(
+                            '[CAJ] Error procesando mensaje pendiente:',
+                            error.message
+                        )
+                    );
                 } else {
                     await control.recibir({
                         jid: chatId,
@@ -233,34 +699,73 @@ async function iniciarSesion(sessionId = 'coordinador_carlos') {
                         delAsesor: false,
                         texto: '[INICIO_ATENCION_CAJ]',
                         tipo: 'texto'
-                    }).catch(err => console.error('Error al iniciar recepción IA tras etiquetar:', err.message));
+                    }).catch(
+                        error => console.error(
+                            '[CAJ] Error iniciando recepcion:',
+                            error.message
+                        )
+                    );
                 }
             }
         }
     });
 
-    // === 3. OÍDO DEL SISTEMA: RECEPCIÓN DE MENSAJES (CLIENTE + RELEVO DEL ASESOR) ===
-    sock.ev.on('messages.upsert', async (m) => {
-        const listaMensajes = Array.isArray(m?.messages) ? m.messages : [];
+    // ========================================================
+    // RECEPCION DE MENSAJES DE CLIENTES Y ASESORES
+    // ========================================================
 
-        for (const msg of listaMensajes) {
-            if (!msg || !msg.message || !msg.key) continue;
+    sock.ev.on('messages.upsert', async (evento) => {
+        if (!vigente()) return;
+
+        const mensajes = Array.isArray(evento?.messages)
+            ? evento.messages
+            : [];
+
+        for (const msg of mensajes) {
+            if (!vigente()) return;
+
+            if (!msg || !msg.message || !msg.key) {
+                continue;
+            }
 
             const senderJid = msg.key.remoteJid || '';
-            // Ignorar estados y grupos; la atención CAJ opera solo en chats individuales
-            if (!senderJid || senderJid === 'status@broadcast' || senderJid.includes('@g.us')) continue;
 
-            const msgId = msg.key.id || crypto.randomUUID();
+            if (
+                !senderJid ||
+                senderJid === 'status@broadcast' ||
+                senderJid.includes('@g.us')
+            ) {
+                continue;
+            }
+
+            const msgId =
+                msg.key.id ||
+                crypto.randomUUID();
+
             const fromMe = Boolean(msg.key.fromMe);
-            const { texto: textoEntrante, tipo } = extraerTextoMensaje(msg);
 
-            // Distinguir si un mensaje con fromMe=true fue emitido automáticamente por nuestro bot IA
-            // o si fue escrito manualmente por el asesor jurídico desde su teléfono.
-            const timestampBot = envioBotReciente.get(senderJid) || 0;
-            const tieneEncabezadoBot = textoEntrante.startsWith('🏛️ *') || textoEntrante.startsWith('🤖 Sistema AlucineLex');
-            const esMensajeDelBot = idsEnviadosPorBot.has(msgId)
-                || (fromMe && tieneEncabezadoBot)
-                || (fromMe && (Date.now() - timestampBot < 2500) && tieneEncabezadoBot);
+            const {
+                texto: textoEntrante,
+                tipo
+            } = extraerTextoMensaje(msg);
+
+            const timestampBot =
+                envioBotReciente.get(senderJid) || 0;
+
+            const tieneEncabezadoBot =
+                textoEntrante.startsWith('🏛️ *') ||
+                textoEntrante.startsWith(
+                    '🤖 Sistema AlucineLex'
+                );
+
+            const esMensajeDelBot =
+                idsEnviadosPorBot.has(msgId) ||
+                (fromMe && tieneEncabezadoBot) ||
+                (
+                    fromMe &&
+                    Date.now() - timestampBot < 2500 &&
+                    tieneEncabezadoBot
+                );
 
             if (esMensajeDelBot) {
                 control.registrarIdPropio(msgId);
@@ -268,9 +773,13 @@ async function iniciarSesion(sessionId = 'coordinador_carlos') {
             }
 
             const delAsesor = fromMe;
-            const numeroRemitente = normalizarTelefono(senderJid);
 
-            console.log(`\n📩 [CAJ WHATSAPP] Mensaje de ${delAsesor ? 'ASESOR' : 'CLIENTE'} (${numeroRemitente}): "${textoEntrante.slice(0, 120)}"`);
+            const numeroRemitente =
+                normalizarTelefono(senderJid);
+
+            console.log(
+                `[CAJ WHATSAPP] Mensaje recibido de ${delAsesor ? 'ASESOR' : 'CLIENTE'}: ${numeroRemitente}`
+            );
 
             const mensajeNormalizado = {
                 jid: senderJid,
@@ -280,95 +789,244 @@ async function iniciarSesion(sessionId = 'coordinador_carlos') {
                 tipo
             };
 
-            // Si escribe el cliente antes de que el asesor etiquete el chat, guardamos su último mensaje
-            // para que en el instante en que el asesor le ponga la etiqueta en el teléfono, la IA le responda.
             if (!delAsesor && textoEntrante) {
-                ultimosMensajesCliente.set(senderJid, mensajeNormalizado);
+                ultimosMensajesCliente.set(
+                    senderJid,
+                    mensajeNormalizado
+                );
             }
 
             try {
-                const resultado = await control.recibir(mensajeNormalizado);
+                const resultado = await control.recibir(
+                    mensajeNormalizado
+                );
+
                 if (resultado?.respondido) {
                     ultimosMensajesCliente.delete(senderJid);
-                    console.log(`🤖 [CAJ IA] Respuesta enviada a ${numeroRemitente}`);
+
+                    console.log(
+                        `[CAJ IA] Respuesta enviada a ${numeroRemitente}`
+                    );
                 } else if (resultado?.silencioso) {
-                    console.log(`🕵️ [CAJ IA SILENCIOSA] Información procesada y guardada en Firebase para ${numeroRemitente} (control en manos del asesor).`);
+                    console.log(
+                        `[CAJ IA] Analisis silencioso para ${numeroRemitente}`
+                    );
                 } else if (resultado?.ignorado) {
-                    console.log(`⏸️ [CAJ EN ESPERA] Chat ${numeroRemitente} aún no está etiquetado en la lista CAJ del asesor.`);
+                    console.log(
+                        `[CAJ IA] Chat pendiente de etiqueta: ${numeroRemitente}`
+                    );
                 }
             } catch (error) {
-                console.error(`❌ Error procesando mensaje de ${numeroRemitente}:`, error.message);
+                console.error(
+                    `[CAJ IA] Error procesando mensaje ${numeroRemitente}:`,
+                    error.message
+                );
             }
         }
     });
 
+    // ========================================================
+    // REGISTRO DE LA SESION
+    // ========================================================
+
+    if (
+        sesionesDetenidas.has(sessionId) ||
+        generacionActual(sessionId) !== generacion
+    ) {
+        try {
+            sock.ws?.close();
+        } catch (error) {
+            console.warn(
+                '[CAJ BAILEYS] Error cerrando socket cancelado:',
+                error.message
+            );
+        }
+
+        return null;
+    }
+
     sesiones.set(sessionId, sock);
+
     return sock;
 }
 
-function obtenerEstadoSesion(sessionId = 'coordinador_carlos') {
-    return estados.get(sessionId) || { estado: 'no_iniciado', qr: null };
+// ============================================================
+// CONSULTAR ESTADO DE SESION
+// ============================================================
+
+function obtenerEstadoSesion(
+    sessionId = 'coordinador_carlos'
+) {
+    return estados.get(sessionId) || {
+        estado: 'no_iniciado',
+        qr: null
+    };
 }
 
-async function desconectarSesion(sessionId = 'coordinador_carlos') {
-    const sock = sesiones.get(sessionId);
-    const control = controles.get(sessionId);
-    if (control) control.conectar(false);
+// ============================================================
+// DESVINCULACION VOLUNTARIA
+// ============================================================
 
-    if (sock) {
-        await sock.logout();
-        sesiones.delete(sessionId);
-        estados.set(sessionId, { estado: 'desconectado', qr: null });
-        const folder = path.join(authDir, sessionId);
-        if (fs.existsSync(folder)) {
-            fs.rmSync(folder, { recursive: true, force: true });
-        }
-        return true;
+async function desconectarSesion(
+    sessionId = 'coordinador_carlos'
+) {
+    const desconexionExistente =
+        desconexionesPendientes.get(sessionId);
+
+    if (desconexionExistente) {
+        return desconexionExistente;
     }
-    return false;
+
+    sesionesDetenidas.add(sessionId);
+    incrementarGeneracion(sessionId);
+    cancelarReconexiones(sessionId);
+
+    const sock = sesiones.get(sessionId);
+    sesiones.delete(sessionId);
+
+    const control = controles.get(sessionId);
+
+    if (control) {
+        control.conectar(false);
+    }
+
+    estados.set(sessionId, {
+        estado: 'desconectado',
+        qr: null
+    });
+
+    if (!sock) {
+        return false;
+    }
+
+    const operacion = (async () => {
+        await sock.logout();
+
+        const folder = path.join(authDir, sessionId);
+
+        if (fs.existsSync(folder)) {
+            fs.rmSync(folder, {
+                recursive: true,
+                force: true
+            });
+        }
+
+        conflictosConsecutivos.delete(sessionId);
+
+        console.log(
+            `[CAJ BAILEYS] Sesion desvinculada voluntariamente: ${sessionId}`
+        );
+
+        return true;
+    })();
+
+    desconexionesPendientes.set(
+        sessionId,
+        operacion
+    );
+
+    try {
+        return await operacion;
+    } finally {
+        if (
+            desconexionesPendientes.get(sessionId) ===
+            operacion
+        ) {
+            desconexionesPendientes.delete(sessionId);
+        }
+    }
 }
 
-/**
- * Envío manual desde el Dashboard CAJ (actúa como intervención del asesor jurídico,
- * pausando respuestas automáticas de la IA y registrando el mensaje en Firebase).
- */
-async function enviarMensaje(sessionId = 'coordinador_carlos', numero, texto) {
+// ============================================================
+// ENVIO MANUAL DE MENSAJES DESDE EL DASHBOARD
+// ============================================================
+
+async function enviarMensaje(
+    sessionId = 'coordinador_carlos',
+    numero,
+    texto
+) {
     const sock = sesiones.get(sessionId);
-    if (!sock) {
-        throw new Error('Sesión no conectada');
+
+    if (
+        !sock ||
+        estados.get(sessionId)?.estado !== 'conectado'
+    ) {
+        throw new Error(
+            'Sesion de WhatsApp no conectada'
+        );
     }
 
     const jid = formatearJid(numero);
-    if (!jid) throw new Error('Número de WhatsApp inválido');
 
-    const enviado = await sock.sendMessage(jid, { text: texto });
+    if (!jid) {
+        throw new Error(
+            'Numero de WhatsApp invalido'
+        );
+    }
+
+    const enviado = await sock.sendMessage(
+        jid,
+        { text: texto }
+    );
+
     const control = obtenerOCrearControl(sessionId);
+
     if (control && control.permitido(jid)) {
         await control.recibir({
             jid,
-            id: enviado?.key?.id || `asesor_web_${Date.now()}`,
+            id: enviado?.key?.id ||
+                `asesor_web_${Date.now()}`,
             delAsesor: true,
             texto,
             tipo: 'texto'
-        }).catch(() => {});
+        }).catch(error => {
+            console.error(
+                '[CAJ] Error registrando mensaje manual:',
+                error.message
+            );
+        });
     }
+
     return enviado;
 }
 
-/**
- * Permite al asesor incluir o reactivar un número en la lista de atención IA
- * (tanto desde el Dashboard como por etiqueta)
- */
-async function activarIAEnChat(sessionId = 'coordinador_carlos', numero, activar = true, dispararSaludo = false) {
-    const control = obtenerOCrearControl(sessionId);
-    const jid = formatearJid(numero);
-    if (!jid) throw new Error('Número de teléfono no válido');
+// ============================================================
+// ACTIVACION Y REACTIVACION DE IA POR CLIENTE
+// ============================================================
 
-    await control.asignarEnLista(jid, activar);
-    if (activar && dispararSaludo && control.permitido(jid)) {
-        const pendiente = ultimosMensajesCliente.get(jid);
+async function activarIAEnChat(
+    sessionId = 'coordinador_carlos',
+    numero,
+    activar = true,
+    dispararSaludo = false
+) {
+    const control = obtenerOCrearControl(sessionId);
+
+    const jid = formatearJid(numero);
+
+    if (!jid) {
+        throw new Error(
+            'Numero de telefono no valido'
+        );
+    }
+
+    await control.asignarEnLista(
+        jid,
+        activar
+    );
+
+    if (
+        activar &&
+        dispararSaludo &&
+        control.permitido(jid)
+    ) {
+        const pendiente =
+            ultimosMensajesCliente.get(jid);
+
         if (pendiente) {
             ultimosMensajesCliente.delete(jid);
+
             await control.recibir(pendiente);
         } else {
             await control.recibir({
@@ -380,8 +1038,13 @@ async function activarIAEnChat(sessionId = 'coordinador_carlos', numero, activar
             });
         }
     }
+
     return control.estadoChat(jid);
 }
+
+// ============================================================
+// EXPORTACIONES UTILIZADAS POR SERVER.JS
+// ============================================================
 
 module.exports = {
     iniciarSesion,
