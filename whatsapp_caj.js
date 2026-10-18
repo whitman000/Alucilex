@@ -156,9 +156,17 @@ async function iniciarSesion(sessionId = 'coordinador_carlos') {
             }
         }
 
-        if (connection === 'close') {
+         if (connection === 'close') {
+            const codigoDesconexion = lastDisconnect?.error?.output?.statusCode;
+            const motivoDesconexion = lastDisconnect?.error?.message || 'Motivo no informado';
+
+            console.error('[CAJ BAILEYS] CONEXION CERRADA');
+            console.error('[CAJ BAILEYS] Sesion:', sessionId);
+            console.error('[CAJ BAILEYS] Codigo:', codigoDesconexion);
+            console.error('[CAJ BAILEYS] Motivo:', motivoDesconexion);
+
             control.conectar(false);
-            const shouldReconnect = (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut);
+            const shouldReconnect = (codigoDesconexion !== DisconnectReason.loggedOut);
 
             if (shouldReconnect) {
                 estados.set(sessionId, { estado: 'reconectando', qr: null });
