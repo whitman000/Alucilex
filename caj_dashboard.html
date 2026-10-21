@@ -92,6 +92,185 @@
   .btn-coordinacion-top { background: #059669; color: #ffffff; border: 1px solid #047857; padding: 7px 14px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; display: none; align-items: center; gap: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
 </style>
 
+<style id="caj-redisenio-2026">
+  body { background: #f1f5f9; padding: clamp(10px, 2vw, 24px); }
+  body > header, body > .grid-container { max-width: 1540px; margin-left: auto; margin-right: auto; }
+  body > header { border-radius: 16px; padding: 22px 26px; gap: 16px; flex-wrap: wrap;
+    background: linear-gradient(120deg,#0f2749,#174b78); box-shadow: 0 12px 30px rgba(15,39,73,.16); }
+  header h1 { font-size: clamp(17px,2vw,24px); line-height:1.3; }
+  .grid-container { grid-template-columns: minmax(290px, 360px) minmax(0,1fr); gap: 22px; align-items: start; }
+  .grid-container > div { min-width: 0; }
+  .card { border-radius: 16px; padding: clamp(16px,2vw,24px); box-shadow:0 5px 22px rgba(31,50,80,.055); }
+  .card-title { font-size: 15px; padding-bottom: 13px; margin-bottom:16px; }
+  input, select, textarea { max-width:100%; padding:11px 12px; min-height:42px; font-size:14px; }
+  textarea { min-height:100px; }
+  .btn { min-height:37px; border-radius:9px; }
+  .case-item { border-radius:11px; padding:14px; }
+  .modal-auth-box { max-height:calc(100dvh - 30px); overflow:auto; width:min(94vw,720px); }
+  #modal-caj-coordinacion .modal-auth-box { max-width:760px !important; }
+  #lista-postulantes-tabla { max-height: 340px !important; }
+  .caj-asesor-fila { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px solid #e2e8f0; }
+  .caj-asesor-datos { min-width:0; overflow-wrap:anywhere; }
+  .caj-asesor-acciones { display:flex; gap:7px; flex-wrap:wrap; }
+  .caj-edit-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:14px; }
+  .caj-edit-form label { margin:0; }
+  .caj-edit-form input { margin-top:5px; }
+  @media (max-width:950px) { .grid-container {grid-template-columns:1fr;} }
+  @media (max-width:580px) {
+    body {padding:8px;} header {padding:16px;} .card {padding:14px;}
+    .caj-edit-form {grid-template-columns:1fr;}
+    .caj-asesor-fila {align-items:flex-start;flex-direction:column;}
+    #modal-caj-coordinacion .modal-auth-box > div > div[style*="grid-template-columns"] {grid-template-columns:1fr !important;}
+    .user-badge-bar { flex-wrap:wrap; }
+  }
+</style>
+
+<style id="ALUCILEX_VISUAL_20261021_V2">
+body {
+    background: #edf2f7;
+    color: #15263e;
+}
+body > header {
+    background: linear-gradient(115deg, #10233e, #1a466f);
+    border-radius: 16px;
+    padding: 22px 26px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+}
+body > header h1 {
+    color: #ffffff !important;
+    font-size: clamp(20px, 2vw, 27px);
+    font-weight: 750;
+    line-height: 1.3;
+}
+body > header small {
+    color: #dce9fa !important;
+    font-size: 13px;
+}
+#statusServidor {
+    color: #dcfce7 !important;
+    background: #14533d !important;
+    border: 1px solid #48a783;
+    font-weight: 700;
+    white-space: nowrap;
+}
+#user-profile-container {
+    width: 100%;
+    margin: 14px auto 18px;
+}
+#user-profile-container .user-badge-bar {
+    background: #142b49 !important;
+    border: 1px solid #385779 !important;
+    border-radius: 14px;
+    padding: 13px 16px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+}
+#user-profile-container .user-badge-bar > span {
+    color: #f8fafc !important;
+    font-size: 14px;
+    margin-right: auto;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+#user-profile-container .user-badge-bar strong {
+    color: #ffffff !important;
+    font-weight: 800;
+}
+#user-profile-container .user-badge-bar button {
+    min-height: 42px;
+    padding: 9px 14px;
+    border-radius: 9px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    cursor: pointer;
+}
+#user-profile-container .btn-coordinacion-top {
+    color: #ffffff !important;
+}
+#user-profile-container .btn-logout {
+    background: #fff1f2 !important;
+    color: #9f1239 !important;
+    border: 1px solid #fda4af !important;
+}
+.grid-container {
+    grid-template-columns: minmax(290px, 350px) minmax(0, 1fr);
+    align-items: start;
+    gap: 20px;
+}
+.grid-container > div, .card {
+    min-width: 0;
+}
+.card {
+    border-radius: 15px;
+    box-shadow: 0 5px 18px rgba(15, 35, 65, .07);
+}
+#caj-dialogo-editar-asesor {
+    z-index: 100001;
+}
+#caj-dialogo-editar-asesor .modal-auth-box {
+    width: min(94vw, 620px);
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    border-radius: 16px;
+    padding: 24px;
+}
+.alx-edicion-cabecera {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+.alx-edicion-cabecera h3 {
+    color: #10233e;
+    font-size: 20px;
+}
+.alx-edicion-x {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #eef2f7;
+    color: #263b53;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    font-size: 28px;
+    cursor: pointer;
+}
+.alx-edicion-x:hover {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+@media (max-width: 950px) {
+    .grid-container {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+@media (max-width: 650px) {
+    body > header {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 17px;
+    }
+    #user-profile-container .user-badge-bar > span {
+        flex: 1 1 100%;
+    }
+    .caj-edit-form {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+</style>
 </head>
 <body>
 
@@ -104,12 +283,12 @@
     </div>
     <form id="form-caj-login" onsubmit="ejecutarLoginCAJ(event)">
       <div class="auth-form-group">
-        <label for="login-identificador">WhatsApp (+569...) o RUT</label>
-        <input type="text" id="login-identificador" placeholder="+56957948583 o 12.899.975-2" required autocomplete="username">
+        <label for="login-identificador">Correo electrónico Firebase</label>
+        <input type="email" id="login-identificador" placeholder="correo@ejemplo.com" required autocomplete="username">
       </div>
       <div class="auth-form-group">
-        <label for="login-pin">Código PIN</label>
-        <input type="password" id="login-pin" placeholder="••••" maxlength="8" required autocomplete="current-password">
+        <label for="login-pin">Contraseña Firebase</label>
+        <input type="password" id="login-pin" placeholder="Contraseña" required autocomplete="current-password">
       </div>
       <button type="submit" id="btn-login-caj" class="btn-auth-submit">Ingresar al Sistema</button>
       <div id="login-error-msg" class="auth-error"></div>
@@ -154,7 +333,7 @@
         <input type="text" id="post-nombre" placeholder="Nombre completo" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
         <input type="text" id="post-rut" placeholder="RUT (12.345.678-k)" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
         <input type="text" id="post-tel" placeholder="WhatsApp (+569...)" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
-        <input type="text" id="post-pin" placeholder="PIN (ej: 1234)" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
+        <input type="email" id="post-email" placeholder="Correo electrónico" autocomplete="off" style="padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px;">
       </div>
       <button onclick="guardarPostulante()" style="margin-top: 10px; width: 100%; background: #059669; color: white; border: none; padding: 9px; border-radius: 6px; cursor: pointer; font-weight: 600;">Registrar Postulante</button>
     </div>
@@ -170,10 +349,10 @@
 
 <header>
     <div>
-        <h1>⚖️ Corporación de Asistencia Judicial (CAJ) - Alucilex</h1>
-        <small style="opacity: 0.85;">Diagnóstico Forense, Control de Pertinencia y Tramitación OJV</small>
+        <h1>ALUCILEX | Plataforma de Gestion Juridica</h1>
+        <small style="opacity: 0.85;">Expedientes, atencion juridica y coordinacion</small>
     </div>
-    <div id="statusServidor" style="font-size: 12px; background: rgba(255,255,255,0.2); padding: 5px 12px; border-radius: 20px;">🟢 Servidor Activo (Puerto 3001)</div>
+    <div id="statusServidor" style="font-size: 12px; background: rgba(255,255,255,0.2); padding: 5px 12px; border-radius: 20px;">Sistema activo</div>
 </header>
 
 <div class="grid-container">
@@ -184,13 +363,14 @@
             <div class="card-title"><span>➕ Ingresar Nueva Causa</span></div>
             <form id="formNuevaCausa">
                 <label>Nombre del Usuario:</label>
-                <input type="text" id="nuevoNombre" placeholder="Ej. Carlos Enrique Rosas" required>
+                <input type="text" id="nuevoNombre" placeholder="" required>
 
                 <label>RUT:</label>
-                <input type="text" id="nuevoRut" placeholder="12.345.678-9">
+                <input type="text" id="nuevoRut" placeholder="">
 
                 <label>Rama y Materia del Derecho:</label>
                 <select id="nuevaMateria" required>
+                    <option value="" selected disabled>Seleccione la materia jurídica</option>
                     <optgroup label="Derecho del Trabajo">
                         <option value="Laboral - Despido Injustificado">Laboral (Despido Injustificado / Tutela)</option>
                         <option value="Laboral - Cobro de Prestaciones">Laboral (Cobro de Prestaciones / Finiquito)</option>
@@ -214,13 +394,13 @@
                 </select>
 
                 <label>Tribunal / RIT (si existe):</label>
-                <input type="text" id="nuevoTribunal" placeholder="Ej. Juzgado de Letras del Trabajo de San Bernardo">
+                <input type="text" id="nuevoTribunal" placeholder="">
 
                 <label>Contraparte (Demandado / Empleador):</label>
-                <input type="text" id="nuevaContraparte" placeholder="Ej. Liderman SpA">
+                <input type="text" id="nuevaContraparte" placeholder="">
 
                 <label>Relato de los Hechos:</label>
-                <textarea id="nuevosHechos" placeholder="Explicación detallada de los antecedentes de la causa..."></textarea>
+                <textarea id="nuevosHechos" placeholder=""></textarea>
 
                 <button type="submit" class="btn btn-primary">📁 Crear Expediente en BD</button>
             </form>
@@ -358,17 +538,9 @@
             const data = await res.json();
             
             const todosLosCasos = Array.isArray(data) ? data : (data.casos || []);
-        const sesionStr = sessionStorage.getItem('caj_usuario');
-        const usuarioActivo = sesionStr ? JSON.parse(sesionStr) : null;
-        const casos = (usuarioActivo && usuarioActivo.rol !== 'coordinador')
-            ? todosLosCasos.filter(c => {
-                const telUser = String(usuarioActivo.telefono || '').replace(/[^0-9]/g, '');
-                const telCaso = String(c.postulante_telefono || '').replace(/[^0-9]/g, '');
-                return (c.postulante_id === usuarioActivo.id) ||
-                       (telUser && telCaso && telCaso.includes(telUser)) ||
-                       (c.postulante_nombre && usuarioActivo.nombre && c.postulante_nombre.toLowerCase() === usuarioActivo.nombre.toLowerCase());
-            })
-            : todosLosCasos;
+        // CAJ_AISLAMIENTO_FINAL: la API ya filtra por UID del propietario;
+        // nunca volver a filtrar por nombre, telefono o id de postulante.
+        const casos = todosLosCasos;
             listaCasosGlobal = casos;
             const contenedor = document.getElementById('listaCasos');
             if (!contenedor) return;
@@ -684,6 +856,30 @@
         } catch (e) { alert('No se pudo reactivar la recepción.'); }
     }
 
+    // CAJ_FORMULARIO_LIMPIO_V1
+    document.addEventListener('DOMContentLoaded', () => {
+        const formulario = document.getElementById('formNuevaCausa');
+
+        if (!formulario) return;
+
+        formulario.reset();
+
+        const campos = [
+            'nuevoNombre',
+            'nuevoRut',
+            'nuevoTribunal',
+            'nuevaContraparte',
+            'nuevosHechos'
+        ];
+
+        for (const id of campos) {
+            const elemento = document.getElementById(id);
+            if (elemento) elemento.value = '';
+        }
+
+        const materia = document.getElementById('nuevaMateria');
+        if (materia) materia.value = '';
+    });
     // FORMULARIO NUEVA CAUSA
     document.addEventListener('DOMContentLoaded', () => {
         const form = document.getElementById('formNuevaCausa');
@@ -726,23 +922,14 @@
   const API_AUTH_BASE = '/api/caj';
 
   function verificarSesionCAJ() {
-    const sesion = sessionStorage.getItem('caj_usuario');
-    if (!sesion) {
-      document.getElementById('modal-caj-login').style.display = 'flex';
-      return false;
-    }
-    const user = JSON.parse(sesion);
-    actualizarBarraUsuario(user);
-    return true;
+    document.getElementById('modal-caj-login').style.display = 'flex';
+    return false;
   }
-
   let intervaloQR = null;
 
   function obtenerIdSesionUsuario(user) {
-    if (!user) return 'coordinador_carlos';
-    if (user.rol === 'coordinador') return 'coordinador_carlos';
-    const limpio = String(user.telefono || user.rut || user.id || 'postulante').replace(/[^a-zA-Z0-9_-]/g, '_');
-    return 'post_' + limpio;
+    // CAJ_QR_PANEL_ASESORES_V2
+    return user?.sessionIdWhatsApp || null;
   }
 
   function actualizarBarraUsuario(user) {
@@ -760,10 +947,32 @@
   }
 
   async function abrirModalQR() {
+    const sesion = sessionStorage.getItem('caj_usuario');
+    const user = sesion ? JSON.parse(sesion) : null;
+    const sessionId = obtenerIdSesionUsuario(user);
+
+    if (!sessionId) {
+      alert('Tu cuenta no tiene una sesion WhatsApp asignada.');
+      return;
+    }
+
+    if (intervaloQR) {
+      clearInterval(intervaloQR);
+      intervaloQR = null;
+    }
+
     document.getElementById('modal-caj-qr').style.display = 'flex';
+
     await solicitarNuevoQR();
-    if (intervaloQR) clearInterval(intervaloQR);
-    intervaloQR = setInterval(consultarEstadoQR, 3500);
+
+    if (document.getElementById('modal-caj-qr').style.display === 'flex' &&
+        !intervaloQR) {
+      intervaloQR = setInterval(consultarEstadoQR, 3500);
+    }
+
+    if (document.getElementById('modal-caj-qr').style.display === 'flex') {
+      await consultarEstadoQR();
+    }
   }
 
   function cerrarModalQR() {
@@ -785,11 +994,21 @@
       return;
     }
     if (data.estado === 'conectado') {
+      // CAJ_QR_CIERRE_AUTOMATICO_V1
+      cerrarModalQR();
+
+      if (typeof cargarCasos === 'function') {
+        Promise.resolve(cargarCasos()).catch(error => {
+          console.error('[CAJ QR] Error actualizando panel:', error);
+        });
+      }
+
+      return;
       badge.style.background = '#dcfce7';
       badge.style.color = '#166534';
       badge.innerText = '🟢 WhatsApp conectado (prueba local) (' + (data.numero || 'Activo') + ')';
       box.innerHTML = '<div style="padding: 20px; color: #059669; font-weight: 600;">✅ WhatsApp vinculado al servidor de prueba.<br><small style="color:#475569; font-weight:400;">Mantén el servidor local encendido. Solo se procesan chats con etiqueta CAJ reconocida.</small></div>';
-    } else if (data.estado === 'esperando_qr' && data.qr) {
+    } else if (['esperando_qr', 'qr_listo'].includes(data.estado) && data.qr) {
       badge.style.background = '#fef3c7';
       badge.style.color = '#92400e';
       badge.innerText = '🟡 Escanea el código QR con tu celular';
@@ -804,7 +1023,7 @@
 
   async function solicitarNuevoQR() {
     const sesion = sessionStorage.getItem('caj_usuario');
-    const user = sesion ? JSON.parse(sesion) : { nombre: 'Carlos Rosas', rol: 'coordinador', telefono: '+56957948583' };
+    const user = sesion ? JSON.parse(sesion) : null;
     const sessionId = obtenerIdSesionUsuario(user);
     try {
       const res = await fetch(`${API_AUTH_BASE}/whatsapp/qr/iniciar`, {
@@ -821,7 +1040,7 @@
 
   async function consultarEstadoQR() {
     const sesion = sessionStorage.getItem('caj_usuario');
-    const user = sesion ? JSON.parse(sesion) : { nombre: 'Carlos Rosas', rol: 'coordinador', telefono: '+56957948583' };
+    const user = sesion ? JSON.parse(sesion) : null;
     const sessionId = obtenerIdSesionUsuario(user);
     try {
       const res = await fetch(`${API_AUTH_BASE}/whatsapp/qr/estado/${encodeURIComponent(sessionId)}`);
@@ -833,7 +1052,7 @@
   async function desvincularWhatsAppQR() {
     if (!confirm('¿Deseas desvincular el WhatsApp actual para escanear otro teléfono?')) return;
     const sesion = sessionStorage.getItem('caj_usuario');
-    const user = sesion ? JSON.parse(sesion) : { nombre: 'Carlos Rosas', rol: 'coordinador' };
+    const user = sesion ? JSON.parse(sesion) : null;
     const sessionId = obtenerIdSesionUsuario(user);
     try {
       await fetch(`${API_AUTH_BASE}/whatsapp/qr/desconectar`, {
@@ -849,47 +1068,39 @@
 
   async function ejecutarLoginCAJ(e) {
     e.preventDefault();
+
     const btn = document.getElementById('btn-login-caj');
-    const errDiv = document.getElementById('login-error-msg');
-    const identificador = document.getElementById('login-identificador').value.trim();
-    const pin = document.getElementById('login-pin').value.trim();
+    const error = document.getElementById('login-error-msg');
 
     btn.disabled = true;
-    btn.innerText = 'Validando acceso...';
-    errDiv.style.display = 'none';
+    error.style.display = 'none';
 
     try {
-      const res = await fetch(`${API_AUTH_BASE}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identificador, pin })
-      });
-      const data = await res.json();
-      const user = data.usuario || data.postulante; if (data.ok && user) {
-        sessionStorage.setItem('caj_usuario', JSON.stringify(user));
-        document.getElementById('modal-caj-login').style.display = 'none';
-        actualizarBarraUsuario(user);
-        if (typeof cargarCasos === 'function') {
-          cargarCasos();
-        }
-      } else {
-        errDiv.innerText = data.error || 'Credenciales inválidas. Revise su número/RUT o PIN.';
-        errDiv.style.display = 'block';
+      if (!window.iniciarSesionFirebaseCAJ) {
+        throw new Error('Firebase todavia no esta disponible');
       }
-    } catch (err) {
-      errDiv.innerText = 'Error al conectar con el servidor: ' + err.message;
-      errDiv.style.display = 'block';
+
+      const correo = document.getElementById('login-identificador').value.trim();
+      const clave = document.getElementById('login-pin').value;
+
+      await window.iniciarSesionFirebaseCAJ(correo, clave);
+      await window.verificarPerfilFirebaseCAJ();
+
+    } catch (e) {
+      error.textContent = e.message || 'No se pudo autenticar';
+      error.style.display = 'block';
     } finally {
       btn.disabled = false;
-      btn.innerText = 'Ingresar al Sistema';
     }
   }
 
-  function cerrarSesionCAJ() {
+  async function cerrarSesionCAJ() {
+    if (window.cerrarSesionFirebaseCAJ) {
+      await window.cerrarSesionFirebaseCAJ();
+    }
     sessionStorage.removeItem('caj_usuario');
-    window.location.reload();
+    location.reload();
   }
-
   async function abrirCoordinacion() {
     document.getElementById('modal-caj-coordinacion').style.display = 'flex';
     cargarPostulantes();
@@ -899,51 +1110,192 @@
     document.getElementById('modal-caj-coordinacion').style.display = 'none';
   }
 
-  async function cargarPostulantes() {
-    const list = document.getElementById('lista-postulantes-tabla');
+  // CAJ_ALTA_FIREBASE_UI_V1
+  async function mostrarInvitacionCAJ(invitacion) {
+    if (!invitacion || !invitacion.correo) return;
     try {
-      const res = await fetch(`${API_AUTH_BASE}/postulantes`);
-      const data = await res.json();
-      if (data.ok && data.postulantes) {
-        list.innerHTML = data.postulantes.map(p => `
-          <div style="padding: 6px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between;">
-            <div><strong>${p.nombre}</strong> (${p.rut || 'S/RUT'}) - Tel: ${p.telefono}</div>
-            <span style="color: #059669; font-weight: 600;">${p.rol || 'postulante'}</span>
-          </div>
-        `).join('') || 'No hay postulantes registrados aún.';
-      }
-    } catch (e) {
-      list.innerText = 'Error al cargar: ' + e.message;
+      await window.enviarCorreoActivacionAsesorCAJ(invitacion.correo);
+      alert('Firebase acepto el envio de la invitacion a ' + invitacion.correo + '. Compruebe su bandeja de correo y spam.');
+    } catch (error) {
+      alert('Cuenta registrada, pero NO se envio el correo. Use Activar en Firebase para reintentar. Detalle: ' + error.message);
     }
+  }
+  async function activarAsesorCAJ(id) {
+    try {
+      const respuesta = await fetch(`${API_AUTH_BASE}/postulantes/${encodeURIComponent(id)}/activar`, {method:'POST'});
+      const data = await respuesta.json();
+      if (!respuesta.ok || !data.ok) throw new Error(data.error || 'No fue posible activar');
+      await mostrarInvitacionCAJ(data);
+      await cargarPostulantes();
+    } catch(e) { alert(e.message); }
+  }
+
+
+  // CAJ_EDICION_ASESORES_20261021
+  function editarAsesorCAJ(p) {
+    const anterior = document.getElementById('caj-dialogo-editar-asesor');
+    if (anterior) anterior.remove();
+    const fondo = document.createElement('div');
+    fondo.id = 'caj-dialogo-editar-asesor';
+    fondo.className = 'modal-auth-overlay';
+    fondo.style.display = 'flex';
+    const caja = document.createElement('div');
+    caja.className = 'modal-auth-box';
+    caja.style.maxWidth = '620px';
+    const titulo = document.createElement('h3');
+    titulo.textContent = 'Editar asesor jurídico';
+    titulo.style.margin = '0';
+
+    const cabeceraEdicion = document.createElement('div');
+    cabeceraEdicion.className = 'alx-edicion-cabecera';
+
+    const botonCerrarEdicion = document.createElement('button');
+    botonCerrarEdicion.type = 'button';
+    botonCerrarEdicion.className = 'alx-edicion-x';
+    botonCerrarEdicion.textContent = String.fromCharCode(88);
+    botonCerrarEdicion.setAttribute('aria-label', 'Cerrar ventana');
+    botonCerrarEdicion.title = 'Cerrar';
+    botonCerrarEdicion.addEventListener('click', () => fondo.remove());
+
+    cabeceraEdicion.append(titulo, botonCerrarEdicion);
+    const aviso = document.createElement('p');
+    aviso.textContent = 'En cuentas vinculadas, correo y WhatsApp se mantienen protegidos.';
+    aviso.style.color = '#64748b';
+    const form = document.createElement('form');
+    form.className = 'caj-edit-form';
+    const entradas = {};
+    for (const [campo, rotulo] of [
+      ['nombre','Nombre completo'],['rut','RUT'],['telefono','WhatsApp'],['email','Correo electrónico']
+    ]) {
+      const label = document.createElement('label');
+      label.textContent = rotulo;
+      const input = document.createElement('input');
+      input.name = campo;
+      input.value = p[campo] || '';
+      input.required = campo === 'nombre' || (p.estado_vinculacion !== 'vinculado' && campo !== 'rut');
+      input.type = campo === 'email' ? 'email' : 'text';
+      if (p.estado_vinculacion === 'vinculado' && ['telefono','email'].includes(campo)) {
+        input.readOnly = true;
+        input.title = 'Modificar desde gestion de identidad vinculada';
+      }
+      label.appendChild(input);
+      form.appendChild(label);
+      entradas[campo] = input;
+    }
+    const acciones = document.createElement('div');
+    acciones.style.cssText = 'grid-column:1/-1;display:flex;justify-content:flex-end;gap:10px;margin-top:12px;flex-wrap:wrap';
+    const cancelar = document.createElement('button');
+    cancelar.type = 'button';
+    cancelar.className = 'btn btn-outline';
+    cancelar.textContent = 'Cancelar';
+    cancelar.onclick = () => fondo.remove();
+    const guardar = document.createElement('button');
+    guardar.type = 'submit';
+    guardar.className = 'btn btn-primary';
+    guardar.style.cssText = 'width:auto;margin:0';
+    guardar.textContent = 'Guardar cambios';
+    acciones.append(cancelar, guardar);
+    form.appendChild(acciones);
+    form.addEventListener('submit', async ev => {
+      ev.preventDefault();
+      guardar.disabled = true;
+      try {
+        const body = {
+          nombre: entradas.nombre.value.trim(),
+          rut: entradas.rut.value.trim()
+        };
+        if (p.estado_vinculacion !== 'vinculado') {
+          body.telefono = entradas.telefono.value.trim();
+          body.email = entradas.email.value.trim();
+        }
+        const r = await fetch(`${API_AUTH_BASE}/postulantes/${encodeURIComponent(p.id)}/editar`, {
+          method: 'PUT', headers: {'Content-Type':'application/json'}, body:JSON.stringify(body)
+        });
+        const respuesta = await r.json();
+        if (!r.ok || !respuesta.ok) throw new Error((respuesta.error || 'No fue posible guardar') + ' (HTTP ' + r.status + ')');
+        fondo.remove();
+        await cargarPostulantes();
+      } catch (error) { alert(error.message); }
+      finally { guardar.disabled = false; }
+    });
+    caja.append(cabeceraEdicion, aviso, form);
+    fondo.appendChild(caja);
+    document.body.appendChild(fondo);
+  }
+
+  // CAJ_PANEL_ASESORES_V2
+  async function cargarPostulantes() {
+    const lista = document.getElementById('lista-postulantes-tabla');
+    lista.textContent = 'Cargando asesores...';
+    try {
+      const respuesta = await fetch(`${API_AUTH_BASE}/postulantes`);
+      const data = await respuesta.json();
+      if (!respuesta.ok || !data.ok) throw new Error(data.error || 'Acceso no autorizado');
+      lista.replaceChildren();
+      if (!data.postulantes.length) {
+        lista.textContent = 'No hay asesores registrados.';
+        return;
+      }
+      for (const p of data.postulantes) {
+        const fila = document.createElement('div');
+        fila.style.cssText = 'padding:8px 0;border-bottom:1px solid #e2e8f0';
+        const nombre = document.createElement('strong');
+        nombre.textContent = p.nombre || 'Sin nombre';
+        const detalle = document.createElement('div');
+        detalle.textContent = `${p.email || 'Sin correo'} · ${p.telefono || 'Sin telefono'} · ${p.estado_vinculacion || 'pendiente'}`;
+        detalle.style.cssText = 'font-size:12px;color:#475569';
+        fila.className = 'caj-asesor-fila';
+        const datosAsesor = document.createElement('div');
+        datosAsesor.className = 'caj-asesor-datos';
+        datosAsesor.append(nombre, detalle);
+        fila.appendChild(datosAsesor);
+        const accionesAsesor = document.createElement('div');
+        accionesAsesor.className = 'caj-asesor-acciones';
+        const editar = document.createElement('button');
+        editar.type = 'button';
+        editar.textContent = 'Editar';
+        editar.className = 'btn btn-outline';
+        editar.addEventListener('click', () => editarAsesorCAJ(p));
+        accionesAsesor.appendChild(editar);
+        fila.appendChild(accionesAsesor);
+        if (p.estado_vinculacion !== 'vinculado' && !p.duplicado_de) {
+          const boton = document.createElement('button');
+          boton.type = 'button';
+          boton.textContent = 'Activar en Firebase';
+          boton.className = 'btn btn-outline';
+          boton.style.marginTop = '5px';
+          boton.addEventListener('click', () => activarAsesorCAJ(p.id));
+          accionesAsesor.appendChild(boton);
+        }
+        lista.appendChild(fila);
+      }
+    } catch (error) { lista.textContent = 'Error: ' + error.message; }
   }
 
   async function guardarPostulante() {
     const nombre = document.getElementById('post-nombre').value.trim();
     const rut = document.getElementById('post-rut').value.trim();
     const telefono = document.getElementById('post-tel').value.trim();
-    const pin = document.getElementById('post-pin').value.trim();
-    if (!nombre || !telefono || !pin) return alert('Nombre, Teléfono y PIN son requeridos.');
-
+    const email = document.getElementById('post-email').value.trim();
+    if (!nombre || !telefono || !email) {
+      alert('Nombre, WhatsApp y correo son obligatorios');
+      return;
+    }
     try {
-      const res = await fetch(`${API_AUTH_BASE}/postulantes`, {
+      const respuesta = await fetch(`${API_AUTH_BASE}/postulantes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, rut, telefono, pin, rol: 'postulante' })
+        body: JSON.stringify({ nombre, rut, telefono, email })
       });
-      const data = await res.json();
-      if (data.ok) {
-        alert('Postulante registrado con éxito');
-        document.getElementById('post-nombre').value = '';
-        document.getElementById('post-rut').value = '';
-        document.getElementById('post-tel').value = '';
-        document.getElementById('post-pin').value = '';
-        cargarPostulantes();
-      } else {
-        alert('Error: ' + data.error);
+      const data = await respuesta.json();
+      if (!respuesta.ok || !data.ok) throw new Error(data.error || 'Error al registrar');
+      for (const id of ['post-nombre', 'post-rut', 'post-tel', 'post-email']) {
+        document.getElementById(id).value = '';
       }
-    } catch (e) {
-      alert('Error de red: ' + e.message);
-    }
+      if (data.invitacion) await mostrarInvitacionCAJ(data.invitacion);
+      else alert(data.aviso || 'Asesor registrado, invitacion pendiente.');
+      await cargarPostulantes();
+    } catch (error) { alert(error.message); }
   }
 
   // Interceptar carga inicial para verificar autenticacion
@@ -961,5 +1313,110 @@
   });
 </script>
 
+<script type="module">
+  // FIREBASE_CAJ_DASHBOARD_V1
+  // CAJ_FETCH_AUTENTICADO_V1
+  const fetchOriginalCAJ = window.fetch.bind(window);
+
+  window.fetch = async function(input, opciones = {}) {
+    const url = typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url;
+
+    const destino = new URL(url, window.location.href);
+
+    if (destino.origin !== window.location.origin ||
+        !destino.pathname.startsWith('/api/caj/')) {
+      return fetchOriginalCAJ(input, opciones);
+    }
+
+    const token = await obtenerTokenFirebase();
+
+    if (!token) {
+      throw new Error('Debe iniciar sesion con Firebase');
+    }
+
+    const headers = new Headers(
+      opciones.headers ||
+      (input instanceof Request ? input.headers : undefined)
+    );
+
+    headers.set('Authorization', 'Bearer ' + token);
+
+    return fetchOriginalCAJ(input, {
+      ...opciones,
+      headers
+    });
+  };
+
+  import {
+    iniciarSesionFirebase,
+    obtenerTokenFirebase,
+    enviarCorreoActivacionAsesorCAJ,
+    cerrarSesionFirebase,
+    observarSesionFirebase
+  } from './firebase_auth_caj.js';
+
+  window.iniciarSesionFirebaseCAJ = iniciarSesionFirebase;
+  window.obtenerTokenFirebaseCAJ = obtenerTokenFirebase;
+  window.enviarCorreoActivacionAsesorCAJ = enviarCorreoActivacionAsesorCAJ;
+  window.cerrarSesionFirebaseCAJ = cerrarSesionFirebase;
+
+  window.verificarPerfilFirebaseCAJ = async function () {
+    const token = await obtenerTokenFirebase();
+
+    if (!token) {
+      throw new Error('Debe iniciar sesion con Firebase');
+    }
+
+    const res = await fetch('/api/caj/auth/perfil', {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data.error || 'Perfil no autorizado');
+    }
+
+    const perfil = data.usuario;
+
+    const usuario = {
+      id: perfil.uid,
+      nombre: perfil.nombre,
+      rol: perfil.roles.includes('coordinador')
+        ? 'coordinador'
+        : 'asesor',
+      roles: perfil.roles,
+      sessionIdWhatsApp: perfil.sessionIdWhatsApp
+    };
+
+    sessionStorage.setItem('caj_usuario', JSON.stringify(usuario));
+
+    document.getElementById('modal-caj-login').style.display = 'none';
+    actualizarBarraUsuario(usuario);
+    await cargarCasos();
+
+    return usuario;
+  };
+
+  observarSesionFirebase(async usuario => {
+    if (!usuario) {
+      sessionStorage.removeItem('caj_usuario');
+      document.getElementById('modal-caj-login').style.display = 'flex';
+      return;
+    }
+
+    try {
+      await window.verificarPerfilFirebaseCAJ();
+    } catch (error) {
+      sessionStorage.removeItem('caj_usuario');
+      document.getElementById('modal-caj-login').style.display = 'flex';
+      console.error('[CAJ AUTH]', error.message);
+    }
+  });
+</script>
 </body>
 </html>

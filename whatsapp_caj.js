@@ -13,6 +13,7 @@ const pino = require('pino');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const persistencia = require('./gestor_persistencia_caj');
 
 const {
     crearControlConversaciones,
@@ -32,6 +33,11 @@ const {
     transcribirAudioCAJ
 } = require('./transcribir_audio_caj');
 
+const {
+    guardarDocumentoCAJ
+} = require('./procesar_documentos_caj');
+
+
 // ============================================================
 // ADMINISTRACION INDEPENDIENTE DE SESIONES
 // ============================================================
@@ -46,6 +52,7 @@ const desconexionesPendientes = new Map();
 const sesionesDetenidas = new Set();
 const generaciones = new Map();
 const conflictosConsecutivos = new Map();
+const respaldosPendientes = new Map();
 
 const idsEnviadosPorBot = new Set();
 const envioBotReciente = new Map();
@@ -316,7 +323,7 @@ function obtenerOCrearControl(sessionId) {
 // ============================================================
 
 async function iniciarSesion(
-    sessionId = 'coordinador_carlos',
+    sessionId,
     automatico = false
 ) {
     if (desconexionesPendientes.has(sessionId)) {
@@ -350,10 +357,29 @@ async function iniciarSesion(
 
     const generacion = generacionActual(sessionId);
 
-    const inicio = crearSesionBaileys(
-        sessionId,
-        generacion
-    );
+    const inicio = (async () => {
+        const folder = path.join(authDir, sessionId);
+        const autorizado = await persistencia.iniciar(sessionId, folder, async (error) => {
+            sesionesDetenidas.add(sessionId);
+            cancelarReconexiones(sessionId);
+            incrementarGeneracion(sessionId);
+            const sock = sesiones.get(sessionId);
+            sesiones.delete(sessionId);
+            controles.get(sessionId)?.conectar(false);
+            estados.set(sessionId, { estado: 'bloqueado', qr: null });
+            try { sock?.ws?.close(); } catch (_) {}
+            console.error(`[CAJ LEASE] Sesion detenida ${sessionId}: ${error.message}`);
+        });
+        if (!autorizado) {
+            estados.set(sessionId, { estado: 'bloqueado', qr: null });
+            return null;
+        }
+        try { return await crearSesionBaileys(sessionId, generacion); }
+        catch (error) {
+            await persistencia.detener(sessionId).catch(() => {});
+            throw error;
+        }
+    })();
 
     iniciosPendientes.set(
         sessionId,
@@ -371,6 +397,7 @@ async function iniciarSesion(
 
 async function crearSesionBaileys(sessionId, generacion) {
     const folder = path.join(authDir, sessionId);
+    const vinculacionNueva = !fs.existsSync(path.join(folder, 'creds.json'));
 
     const {
         state,
@@ -406,7 +433,8 @@ async function crearSesionBaileys(sessionId, generacion) {
         return (
             sesiones.get(sessionId) === sock &&
             generacionActual(sessionId) === generacion &&
-            !sesionesDetenidas.has(sessionId)
+            !sesionesDetenidas.has(sessionId) &&
+            persistencia.autorizado(sessionId)
         );
     }
 
@@ -419,6 +447,18 @@ async function crearSesionBaileys(sessionId, generacion) {
 
         try {
             await saveCreds();
+            if (persistencia.habilitado()) {
+                const anterior = respaldosPendientes.get(sessionId);
+                if (anterior) clearTimeout(anterior);
+                const temporizador = setTimeout(() => {
+                    respaldosPendientes.delete(sessionId);
+                    if (!vigente()) return;
+                    persistencia.respaldar(sessionId, folder).catch(error => {
+                        console.error(`[CAJ RESPALDO] ${sessionId}: ${error.message}`);
+                    });
+                }, 60000);
+                respaldosPendientes.set(sessionId, temporizador);
+            }
         } catch (error) {
             console.error(
                 '[CAJ BAILEYS] Error guardando credenciales:',
@@ -487,12 +527,20 @@ async function crearSesionBaileys(sessionId, generacion) {
             sesiones.delete(sessionId);
 
             incrementarGeneracion(sessionId);
+            const respaldoPendiente = respaldosPendientes.get(sessionId);
+            if (respaldoPendiente) clearTimeout(respaldoPendiente);
+            respaldosPendientes.delete(sessionId);
+            // La reconexion recuperara un bloqueo propio o uno ya liberado.
+            await persistencia.detener(sessionId).catch(error => {
+                console.error('[CAJ LEASE] Error liberando sesion:', error.message);
+            });
 
             if (codigo === DisconnectReason.loggedOut) {
                 sesionesDetenidas.add(sessionId);
-
                 cancelarReconexiones(sessionId);
-
+                await persistencia.revocar(sessionId).catch(error => {
+                    console.error('[CAJ RESPALDO] No se pudo revocar:', error.message);
+                });
                 estados.set(sessionId, {
                     estado: 'desconectado',
                     qr: null
@@ -576,7 +624,31 @@ async function crearSesionBaileys(sessionId, generacion) {
 
         if (connection === 'open') {
             if (!vigente()) return;
-
+            if (vinculacionNueva && persistencia.habilitado()) {
+                try { await persistencia.nuevaVinculacion(sessionId); }
+                catch (error) {
+                    console.error('[CAJ RESPALDO] No se pudo habilitar nueva vinculacion:', error.message);
+                    sesionesDetenidas.add(sessionId);
+                    cancelarReconexiones(sessionId);
+                    incrementarGeneracion(sessionId);
+                    sesiones.delete(sessionId);
+                    try { sock.ws?.close(); } catch (_) {}
+                    await persistencia.detener(sessionId).catch(() => {});
+                    estados.set(sessionId, { estado: 'bloqueado', qr: null });
+                    return;
+                }
+            }
+            if (persistencia.habilitado()) {
+                const anterior = respaldosPendientes.get(sessionId);
+                if (anterior) clearTimeout(anterior);
+                const temporizador = setTimeout(() => {
+                    respaldosPendientes.delete(sessionId);
+                    if (vigente()) persistencia.respaldar(sessionId, folder).catch(error => {
+                        console.error(`[CAJ RESPALDO] ${sessionId}: ${error.message}`);
+                    });
+                }, 60000);
+                respaldosPendientes.set(sessionId, temporizador);
+            }
             control.conectar(true);
 
             estados.set(sessionId, {
@@ -584,9 +656,50 @@ async function crearSesionBaileys(sessionId, generacion) {
                 qr: null
             });
 
-            console.log(
-                `WhatsApp conectado exitosamente para sesion: ${sessionId}`
-            );
+            void Promise.resolve()
+                .then(async () => {
+                    const { db } = require('./firebase_caj');
+
+                    const consulta = await db
+                        .collection('usuarios_alucilex')
+                        .where('sessionIdWhatsApp', '==', sessionId)
+                        .limit(3)
+                        .get();
+
+                    const activos = consulta.docs.filter(doc => {
+                        const perfil = doc.data();
+                        return perfil.activo === true;
+                    });
+
+                    if (activos.length !== 1) {
+                        return sessionId;
+                    }
+
+                    return String(
+                        activos[0].data().nombre || sessionId
+                    ).trim();
+                })
+                .then(nombre => {
+                    if (!vigente()) return;
+
+                    console.log(
+                        'WhatsApp conectado exitosamente: ' +
+                        (nombre || sessionId)
+                    );
+                })
+                .catch(error => {
+                    if (!vigente()) return;
+
+                    console.warn(
+                        '[CAJ] No se pudo consultar nombre de sesion:',
+                        error.message
+                    );
+
+                    console.log(
+                        'WhatsApp conectado exitosamente para sesion: ' +
+                        sessionId
+                    );
+                });
 
             setTimeout(() => {
                 if (vigente()) {
@@ -835,6 +948,105 @@ async function crearSesionBaileys(sessionId, generacion) {
                 }
             }
 
+
+            // ============================================
+            // DOCUMENTOS WHATSAPP -> FIREBASE STORAGE
+            // ============================================
+
+            const contenidoAdjunto =
+                msg.message?.ephemeralMessage?.message ||
+                msg.message?.viewOnceMessage?.message ||
+                msg.message?.viewOnceMessageV2?.message ||
+                msg.message;
+
+            const archivoAdjunto =
+                contenidoAdjunto?.documentMessage ||
+                contenidoAdjunto?.imageMessage;
+
+            if (
+                archivoAdjunto &&
+                !fromMe &&
+                control.permitido(senderJid)
+            ) {
+                try {
+                    const expedienteId =
+                        await control.obtenerExpedienteParaDocumento(
+                            senderJid
+                        );
+
+                    if (!vigente()) return;
+
+                    const mimeType = String(
+                        archivoAdjunto.mimetype || ''
+                    ).split(';')[0].trim().toLowerCase();
+
+                    const tiposPermitidos = [
+                        'image/jpeg',
+                        'image/png',
+                        'image/webp',
+                        'application/pdf',
+                        'application/msword',
+                        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                    ];
+
+                    if (!tiposPermitidos.includes(mimeType)) {
+                        throw new Error(
+                            `Tipo de archivo no admitido: ${mimeType}`
+                        );
+                    }
+
+                    const archivoBuffer = await downloadMediaMessage(
+                        msg,
+                        'buffer',
+                        {},
+                        {
+                            logger: pino({ level: 'silent' }),
+                            reuploadRequest:
+                                sock.updateMediaMessage.bind(sock)
+                        }
+                    );
+
+                    if (!vigente()) return;
+
+                    const documento = await guardarDocumentoCAJ({
+                        expedienteId,
+                        sessionId,
+                        mensajeId: msgId,
+                        buffer: archivoBuffer,
+                        mimeType,
+                        nombreArchivo:
+                            archivoAdjunto.fileName ||
+                            `WhatsApp_${msgId}`
+                    });
+
+                    if (!vigente()) return;
+
+                    await control.registrarDocumento(
+                        senderJid,
+                        documento
+                    );
+
+                    console.log(
+                        `[CAJ DOCUMENTOS] Archivo guardado en expediente ${expedienteId}`
+                    );
+
+                    // Evita enviar el binario al motor de texto.
+                    // El análisis jurídico del documento se hará
+                    // en una etapa posterior.
+                    continue;
+
+                } catch (error) {
+                    console.error(
+                        '[CAJ DOCUMENTOS] Error guardando archivo:',
+                        error.message
+                    );
+
+                    // Conservar la recepción como multimedia
+                    // pendiente de revisión si ocurre un error.
+                }
+            }
+
+
             const timestampBot =
                 envioBotReciente.get(senderJid) || 0;
 
@@ -941,7 +1153,7 @@ async function crearSesionBaileys(sessionId, generacion) {
 // ============================================================
 
 function obtenerEstadoSesion(
-    sessionId = 'coordinador_carlos'
+    sessionId
 ) {
     return estados.get(sessionId) || {
         estado: 'no_iniciado',
@@ -954,7 +1166,7 @@ function obtenerEstadoSesion(
 // ============================================================
 
 async function desconectarSesion(
-    sessionId = 'coordinador_carlos'
+    sessionId
 ) {
     const desconexionExistente =
         desconexionesPendientes.get(sessionId);
@@ -982,11 +1194,21 @@ async function desconectarSesion(
     });
 
     if (!sock) {
+        if (persistencia.habilitado()) {
+            await persistencia.revocar(sessionId);
+            await persistencia.detener(sessionId);
+        }
         return false;
     }
 
     const operacion = (async () => {
+        // Revocar ANTES del logout evita restaurar credenciales antiguas.
+        await persistencia.revocar(sessionId);
         await sock.logout();
+        const pendiente = respaldosPendientes.get(sessionId);
+        if (pendiente) clearTimeout(pendiente);
+        respaldosPendientes.delete(sessionId);
+        await persistencia.detener(sessionId);
 
         const folder = path.join(authDir, sessionId);
 
@@ -1028,7 +1250,7 @@ async function desconectarSesion(
 // ============================================================
 
 async function enviarMensaje(
-    sessionId = 'coordinador_carlos',
+    sessionId,
     numero,
     texto
 ) {
@@ -1082,7 +1304,7 @@ async function enviarMensaje(
 // ============================================================
 
 async function activarIAEnChat(
-    sessionId = 'coordinador_carlos',
+    sessionId,
     numero,
     activar = true,
     dispararSaludo = false

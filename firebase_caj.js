@@ -2,8 +2,10 @@
 require('dotenv').config();
 const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
+const { getStorage } = require('firebase-admin/storage');
 const path = require('path');
 const fs = require('fs');
+
 
 let credencialFirebase = null;
 
@@ -33,6 +35,14 @@ if (getApps().length === 0 && credencialFirebase) {
 }
 
 const db = getApps().length > 0 ? getFirestore() : null;
+
+const storageBucket = getApps().length > 0
+    ? getStorage().bucket(
+        process.env.FIREBASE_STORAGE_BUCKET ||
+        'alucinet-lex.firebasestorage.app'
+    )
+    : null;
+
 const coleccionCasos = db ? db.collection('casos_caj') : null;
 const coleccionPostulantes = db ? db.collection('postulantes_caj') : null;
 const coleccionConversaciones = db ? db.collection('conversaciones_whatsapp_caj') : null;
@@ -79,6 +89,31 @@ function elegirValorNoVacio(nuevo, previo, porDefecto = '') {
     return porDefecto;
 }
 
+// CAJ_AISLAMIENTO_FINAL: una sesion WhatsApp se vincula a exactamente un perfil activo.
+async function obtenerPerfilSesionCAJ(sessionId) {
+    if (!db || !sessionId) throw new Error('Sesion WhatsApp sin identidad');
+    const q = await db.collection('usuarios_alucilex')
+        .where('sessionIdWhatsApp', '==', sessionId).limit(2).get();
+    if (q.size !== 1 || q.docs[0].data().activo !== true ||
+        !Array.isArray(q.docs[0].data().roles) ||
+        !q.docs[0].data().roles.some(r => ['coordinador','asesor'].includes(r))) {
+        throw new Error('Sesion WhatsApp sin perfil unico y activo');
+    }
+    return { uid: q.docs[0].id, ...q.docs[0].data() };
+}
+
+function idConPropietario(uid, idBase) {
+    const huella = require('crypto').createHash('sha256').update(uid).digest('hex').slice(0, 24);
+    return `CAJ_${huella}_${idBase}`;
+}
+
+async function referenciaCasoPropietario(idBase, uid) {
+    const anterior = coleccionCasos.doc(idBase);
+    const snap = await anterior.get();
+    if (snap.exists && snap.data().propietario_uid === uid) return anterior;
+    return coleccionCasos.doc(idConPropietario(uid, idBase));
+}
+
 // ==========================================
 // GESTIÓN DE EXPEDIENTE FORENSE POR RUT
 // ==========================================
@@ -96,17 +131,28 @@ async function guardarCaso(datos) {
             ? datos.hechos.map(h => String(h || '').trim()).filter(Boolean)
             : (relatoFinal ? [String(relatoFinal).trim()] : []);
 
-        // Determinar el ID del documento:
-        // - Si hay RUT válido -> EXP_<RUT>
-        // - Si viene de WhatsApp o tiene teléfono pero aún no da RUT -> WA_<TELEFONO> (para no duplicar fichas en cada mensaje)
-        const idTempTelefono = telNormalizado ? `WA_${telNormalizado}` : null;
-        const idExpediente = rutTitular ? `EXP_${rutTitular}` : (datos.id_expediente_forzado || idTempTelefono);
+        // Identificadores nuevos exclusivos por propietario; conservar IDs heredados propios.
+        const uid = datos.propietario_uid;
+        if (typeof uid !== 'string' || !uid.trim()) {
+            throw new Error('Propietario Firebase obligatorio para guardar expedientes');
+        }
+        const baseTemporal = telNormalizado ? `WA_${telNormalizado}` : null;
+        const baseDefinitiva = rutTitular ? `EXP_${rutTitular}` : null;
+        const idBase = baseDefinitiva || datos.id_expediente_forzado || baseTemporal;
+        const docRefElegida = idBase
+            ? await referenciaCasoPropietario(idBase, uid)
+            : null;
+        const idExpediente = docRefElegida ? docRefElegida.id : null;
+        const idTempTelefono = baseTemporal
+            ? (await referenciaCasoPropietario(baseTemporal, uid)).id
+            : null;
 
+        let temporalPendienteDeEliminar = null;
         let dataPrevia = {};
         let docRef = null;
 
         if (idExpediente && coleccionCasos) {
-            docRef = coleccionCasos.doc(idExpediente);
+            docRef = docRefElegida;
             const docExistente = await docRef.get();
             if (docExistente.exists) {
                 dataPrevia = docExistente.data() || {};
@@ -117,6 +163,31 @@ async function guardarCaso(datos) {
                 const docTempSnap = await docTempRef.get();
                 if (docTempSnap.exists) {
                     const tempData = docTempSnap.data() || {};
+                    // CAJ_MIGRACION_SEGURA_2762
+                    const propietarioTemporal = tempData.propietario_uid || null;
+                    const propietarioDestino = dataPrevia.propietario_uid || null;
+                    const propietarioEntrante = datos.propietario_uid || null;
+
+                    const propietarios = [
+                        propietarioTemporal,
+                        propietarioDestino,
+                        propietarioEntrante
+                    ].filter(Boolean);
+
+                    if (new Set(propietarios).size > 1) {
+                        throw new Error(
+                            'Migracion bloqueada: propietarios diferentes'
+                        );
+                    }
+
+                    if (propietarios.length > 0 &&
+                        [propietarioTemporal, propietarioDestino,
+                         propietarioEntrante].some(valor => valor === null)) {
+                        throw new Error(
+                            'Migracion bloqueada: propiedad sin verificar'
+                        );
+                    }
+
                     dataPrevia = {
                         ...tempData,
                         ...dataPrevia,
@@ -124,12 +195,23 @@ async function guardarCaso(datos) {
                         historial_whatsapp: [...(tempData.historial_whatsapp || []), ...(dataPrevia.historial_whatsapp || [])],
                         documentos_probatorios: [...(tempData.documentos_probatorios || []), ...(dataPrevia.documentos_probatorios || [])]
                     };
-                    await docTempRef.delete().catch(() => {});
+                    temporalPendienteDeEliminar = docTempRef;
                     console.log(`🔄 Expediente temporal ${idTempTelefono} migrado y fusionado a ${idExpediente}`);
                 }
             }
         }
 
+        // CAJ_PROPIEDAD_INMUTABLE_2761
+        const propietarioExistente = dataPrevia.propietario_uid || null;
+        const propietarioSolicitado = datos.propietario_uid || null;
+
+        if (propietarioExistente &&
+            propietarioSolicitado &&
+            propietarioExistente !== propietarioSolicitado) {
+            throw new Error(
+                'No se permite cambiar el propietario del expediente'
+            );
+        }
         const usuarioPrevio = dataPrevia.usuario || {};
         const contrapartePrevia = dataPrevia.contraparte || {};
         const nombreConsolidado = elegirValorNoVacio(datos.usuario_nombre || datos.nombre || (datos.usuario && datos.usuario.nombre), dataPrevia.usuario_nombre || usuarioPrevio.nombre, 'Usuario CAJ');
@@ -177,12 +259,57 @@ async function guardarCaso(datos) {
         }
         const historialCombinado = Array.from(mapaHistorial.values());
 
-        const adjuntosCombinados = [
-            ...(dataPrevia.documentos_probatorios || []),
-            ...(datos.documentos_probatorios || [])
-        ];
+        // Unificar documentos del expediente sin duplicarlos.
+        // Prioriza el ID del mensaje de WhatsApp o el ID del archivo.
+        const mapaAdjuntos = new Map();
+
+        const documentosPrevios = Array.isArray(dataPrevia.documentos_probatorios)
+            ? dataPrevia.documentos_probatorios
+            : [];
+
+        const documentosNuevos = Array.isArray(datos.documentos_probatorios)
+            ? datos.documentos_probatorios
+            : [];
+
+        for (const documento of [...documentosPrevios, ...documentosNuevos]) {
+            if (!documento) continue;
+
+            const identificador =
+                typeof documento === 'object'
+                    ? (
+                        documento.id_whatsapp ||
+                        documento.id_archivo ||
+                        documento.id ||
+                        documento.storage_path ||
+                        documento.url
+                    )
+                    : null;
+
+            const claveDocumento = identificador
+                ? String(identificador)
+                : JSON.stringify(documento);
+
+            if (!mapaAdjuntos.has(claveDocumento)) {
+                mapaAdjuntos.set(claveDocumento, documento);
+            } else if (
+                typeof documento === 'object' &&
+                documento !== null
+            ) {
+                const anterior = mapaAdjuntos.get(claveDocumento);
+
+                if (typeof anterior === 'object' && anterior !== null) {
+                    mapaAdjuntos.set(claveDocumento, {
+                        ...anterior,
+                        ...documento
+                    });
+                }
+            }
+        }
+
+        const adjuntosCombinados = Array.from(mapaAdjuntos.values());
 
         const registro = {
+            propietario_uid: datos.propietario_uid || dataPrevia.propietario_uid || null,
             rut_titular: rutConsolidado || 'SIN-RUT',
             canal: datos.canal || dataPrevia.canal || 'web',
             usuario_nombre: nombreConsolidado,
@@ -224,7 +351,20 @@ async function guardarCaso(datos) {
         }
 
         if (docRef) {
-            await docRef.set(registro, { merge: true });
+            await db.runTransaction(async tx => {
+                const actual = await tx.get(docRef);
+                if (actual.exists && actual.data().propietario_uid !== uid) {
+                    throw new Error('Escritura bloqueada: propietario distinto o ausente');
+                }
+                if (temporalPendienteDeEliminar) {
+                    const temporal = await tx.get(temporalPendienteDeEliminar);
+                    if (temporal.exists && temporal.data().propietario_uid !== uid) {
+                        throw new Error('Migracion bloqueada: temporal ajeno');
+                    }
+                    if (temporal.exists) tx.delete(temporalPendienteDeEliminar);
+                }
+                tx.set(docRef, registro, { merge: true });
+            });
             console.log(`📁 Expediente sincronizado en Firebase (ID: ${idExpediente})`);
             return { id: idExpediente, ...registro };
         } else {
@@ -248,27 +388,19 @@ async function obtenerCaso(id) {
     }
 }
 
-async function buscarCasoPorTelefono(telefono) {
-    try {
-        const tel = normalizarTelefono(telefono);
-        if (!tel || !coleccionCasos) return null;
-
-        // 1. Revisar si existe documento temporal WA_<telefono>
-        const docTemp = await coleccionCasos.doc(`WA_${tel}`).get();
-        if (docTemp.exists) {
-            return { id: docTemp.id, ...docTemp.data() };
-        }
-
-        // 2. Buscar en casos_caj por usuario.telefono
-        const snap = await coleccionCasos.where('usuario.telefono', '==', tel).limit(1).get();
-        if (!snap.empty) {
-            return { id: snap.docs[0].id, ...snap.docs[0].data() };
-        }
-        return null;
-    } catch (error) {
-        console.error("Error al buscar caso por teléfono:", error);
-        return null;
+async function buscarCasoPorTelefono(telefono, uid) {
+    const tel = normalizarTelefono(telefono);
+    if (!tel || !uid || !coleccionCasos) return null;
+    const preferida = await referenciaCasoPropietario(`WA_${tel}`, uid);
+    const doc = await preferida.get();
+    if (doc.exists && doc.data().propietario_uid === uid) {
+        return { id: doc.id, ...doc.data() };
     }
+    const snap = await coleccionCasos.where('usuario.telefono', '==', tel).get();
+    const propios = snap.docs.filter(d => d.data().propietario_uid === uid);
+    if (propios.length === 1) return { id: propios[0].id, ...propios[0].data() };
+    if (propios.length > 1) throw new Error('Telefono asociado a varios expedientes; requiere seleccion explicita');
+    return null;
 }
 
 async function listarCasos() {
@@ -484,7 +616,8 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
         const mem = asegurarEstadoMemoria(jid);
         if (!coleccionConversaciones) return mem;
         try {
-            const docSnap = await coleccionConversaciones.doc(jid).get();
+            const idConversacion = `${sessionId}_${jid}`;
+const docSnap = await coleccionConversaciones.doc(idConversacion).get();
             if (docSnap.exists) {
                 const data = docSnap.data() || {};
                 if (typeof data.pausado === 'boolean') mem.pausado = data.pausado;
@@ -514,7 +647,7 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
         const mem = asegurarEstadoMemoria(jid);
         if (!coleccionConversaciones) return;
         try {
-            await coleccionConversaciones.doc(jid).set({
+            await coleccionConversaciones.doc(`${sessionId}_${jid}`).set({
                 jid,
                 telefono: mem.telefono,
                 sessionId,
@@ -585,7 +718,8 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
 
         async contexto(jid) {
             const mem = await cargarDesdeFirestore(jid);
-            const casoExistente = await buscarCasoPorTelefono(mem.telefono);
+            const perfilSesion = await obtenerPerfilSesionCAJ(sessionId);
+            const casoExistente = await buscarCasoPorTelefono(mem.telefono, perfilSesion.uid);
             const asesor = await obtenerAsesor();
 
             if (casoExistente) {
@@ -633,6 +767,7 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
             const mem = await cargarDesdeFirestore(jid);
             const extraidos = resultado.datos_extraidos || {};
             const asesor = await obtenerAsesor();
+            const perfilSesion = await obtenerPerfilSesionCAJ(sessionId);
 
             const hechosPrevios = Array.isArray(mem.ficha.hechos) ? mem.ficha.hechos : [];
             const hechosNuevos = Array.isArray(extraidos.hechos) ? extraidos.hechos : [];
@@ -660,6 +795,8 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
 
             const casoGuardado = await guardarCaso({
                 ...mem.ficha,
+                propietario_uid: perfilSesion.uid,
+                postulante_id: perfilSesion.postulante_id || mem.ficha.postulante_id,
                 canal: 'whatsapp',
                 ia_activa: !mem.pausado && !delAsesor,
                 estado_atencion: (mem.pausado || delAsesor) ? 'relevo_asesor_humano' : (extraidos.ficha_completa ? 'ficha_completa_ia' : 'en_indagacion_ia'),
@@ -671,6 +808,116 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
             }
             await persistirEnFirestore(jid);
         },
+
+        // ====================================================
+        // DOCUMENTOS PROBATORIOS RECIBIDOS POR WHATSAPP
+        // ====================================================
+
+        async obtenerExpedienteParaDocumento(jid) {
+            const mem = await cargarDesdeFirestore(jid);
+
+            const perfilSesion = await obtenerPerfilSesionCAJ(sessionId);
+            let caso = mem.expedienteId && coleccionCasos
+                ? await obtenerCaso(mem.expedienteId)
+                : null;
+            if (caso && caso.propietario_uid !== perfilSesion.uid) {
+                throw new Error('Documento bloqueado: expediente de otro propietario');
+            }
+
+
+            if (!caso) {
+                // Los identificadores @lid no son números
+                // telefónicos verificables.
+                // No asociar documentos por coincidencias
+                // de un identificador LID con un teléfono.
+                if (String(jid).endsWith('@lid')) {
+                    throw new Error(
+                        'El chat utiliza un identificador LID sin expediente previamente asociado. Se requiere verificar la vinculacion antes de guardar documentos.'
+                    );
+                }
+
+                caso = await buscarCasoPorTelefono(mem.telefono, perfilSesion.uid);
+            }
+
+            if (!caso || !caso.id) {
+
+                throw new Error(
+                    'No existe un expediente identificado para este chat'
+                );
+            }
+
+            mem.expedienteId = caso.id;
+            await persistirEnFirestore(jid);
+
+            return caso.id;
+        },
+
+        async registrarDocumento(jid, documento) {
+            if (!coleccionCasos) {
+                throw new Error('Firestore no configurado');
+            }
+
+            if (
+                !documento ||
+                !documento.id_archivo ||
+                !documento.storage_path
+            ) {
+                throw new Error('Datos del documento incompletos');
+            }
+
+            const expedienteId =
+                await this.obtenerExpedienteParaDocumento(jid);
+
+            const referencia = coleccionCasos.doc(expedienteId);
+
+            await db.runTransaction(async transaccion => {
+                const snapshot = await transaccion.get(referencia);
+
+                if (!snapshot.exists) {
+                    throw new Error('El expediente ya no existe');
+                }
+
+                const datos = snapshot.data() || {};
+
+                const documentos = Array.isArray(
+                    datos.documentos_probatorios
+                )
+                    ? [...datos.documentos_probatorios]
+                    : [];
+
+                const indice = documentos.findIndex(
+                    item => item &&
+                        item.id_archivo === documento.id_archivo
+                );
+
+                if (indice >= 0) {
+                    documentos[indice] = {
+                        ...documentos[indice],
+                        ...documento
+                    };
+                } else {
+                    documentos.push(documento);
+                }
+
+                transaccion.update(referencia, {
+                    documentos_probatorios: documentos,
+                    actualizadoEn: new Date(),
+                    fecha_actualizacion: new Date()
+                });
+            });
+
+            console.log(
+                `[CAJ DOCUMENTOS] Documento registrado en expediente ${expedienteId}`
+            );
+
+            return {
+                expedienteId,
+                documentoId: documento.id_archivo,
+                registrado: true
+            };
+        },
+
+
 
         async reservarSalida(jid, idSalida) {
             const mem = asegurarEstadoMemoria(jid);
@@ -692,8 +939,10 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
                 };
                 mem.historial.push(msgIA);
                 if (mem.expedienteId && coleccionCasos) {
+                    const perfilSesion = await obtenerPerfilSesionCAJ(sessionId);
                     await guardarCaso({
                         ...mem.ficha,
+                        propietario_uid: perfilSesion.uid,
                         id_expediente_forzado: mem.expedienteId,
                         canal: 'whatsapp',
                         historial_whatsapp: mem.historial
@@ -705,8 +954,10 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
     };
 }
 
+
 module.exports = {
     db,
+    storageBucket,
     normalizarRUT,
     normalizarTelefono,
     guardarCaso,
