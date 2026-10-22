@@ -316,6 +316,12 @@ function crearControlConversaciones({
 
                 // La IA también analiza silenciosamente
                 // los mensajes cuando interviene el asesor.
+                console.log("[DIAG OPENROUTER] INICIO", {
+                    jid,
+                    mensajeId: id,
+                    silencioso: c.pausado || delAsesor,
+                    caracteres: texto.length
+                });
                 const resultado = await analizar({
                     ...mensaje,
                     contexto,
@@ -331,6 +337,25 @@ function crearControlConversaciones({
                     return { ignorado: true };
                 }
 
+                console.log("[DIAG OPENROUTER] RESULTADO", {
+                    jid,
+                    mensajeId: id,
+                    datosExtraidos: Object.keys(
+                        resultado?.datos_extraidos || {}
+                    ).filter(k => {
+                        const valor = resultado.datos_extraidos[k];
+                        return valor !== null &&
+                            valor !== undefined &&
+                            valor !== "" &&
+                            (!Array.isArray(valor) || valor.length > 0);
+                    }),
+                    tieneRespuesta: Boolean(resultado?.respuesta_humana)
+                });
+
+                console.log("[DIAG FIREBASE] INICIO", {
+                    jid,
+                    mensajeId: id
+                });
                 await repo.incorporar(
                     mensaje,
                     resultado
@@ -406,6 +431,7 @@ function crearControlConversaciones({
         });
     }
 
+
     return {
         recibir,
         editarEtiqueta,
@@ -413,6 +439,41 @@ function crearControlConversaciones({
         asignarEnLista,
         reactivar,
         registrarIdPropio,
+
+        // Obtener el expediente asociado al chat de WhatsApp.
+        async obtenerExpedienteParaDocumento(jid) {
+            if (!repo || typeof repo.obtenerExpedienteParaDocumento !== 'function') {
+                throw new Error(
+                    'El repositorio CAJ no permite obtener el expediente'
+                );
+            }
+
+            if (!permitido(jid)) {
+                throw new Error(
+                    'Chat sin etiqueta CAJ autorizada'
+                );
+            }
+
+            return repo.obtenerExpedienteParaDocumento(jid);
+        },
+
+        // Registrar los antecedentes del archivo en el expediente.
+        async registrarDocumento(jid, documento) {
+            if (!repo || typeof repo.registrarDocumento !== 'function') {
+                throw new Error(
+                    'El repositorio CAJ no permite registrar documentos'
+                );
+            }
+
+            if (!permitido(jid)) {
+                throw new Error(
+                    'Chat sin etiqueta CAJ autorizada'
+                );
+            }
+
+            return repo.registrarDocumento(jid, documento);
+        },
+
 
         conectar(valor) {
             conectado = Boolean(valor);

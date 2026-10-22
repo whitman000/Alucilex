@@ -762,6 +762,12 @@ async function crearSesionBaileys(sessionId, generacion) {
             const chatId = association.chatId;
             const labelId = String(association.labelId);
             const tipoAccion = evento.type;
+            console.log('[DIAG ETIQUETA]', {
+                sessionId,
+                chatId,
+                labelId,
+                tipoAccion
+            });
 
             const conocidas = control.obtenerEtiquetas();
 
@@ -860,6 +866,11 @@ async function crearSesionBaileys(sessionId, generacion) {
                 crypto.randomUUID();
 
             const fromMe = Boolean(msg.key.fromMe);
+            console.log('[DIAG MENSAJE]', {
+                sessionId,
+                senderJid,
+                fromMe
+            });
 
             let {
                 texto: textoEntrante,
