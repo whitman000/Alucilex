@@ -138,7 +138,10 @@ async function guardarCaso(datos) {
         }
         const baseTemporal = telNormalizado ? `WA_${telNormalizado}` : null;
         const baseDefinitiva = rutTitular ? `EXP_${rutTitular}` : null;
-        const idBase = baseDefinitiva || datos.id_expediente_forzado || baseTemporal;
+        const expedienteForzado = typeof datos.id_expediente_forzado === 'string'
+            ? datos.id_expediente_forzado.trim()
+            : '';
+        const idBase = expedienteForzado || baseDefinitiva || baseTemporal;
         const docRefElegida = idBase
             ? await referenciaCasoPropietario(idBase, uid)
             : null;
@@ -158,7 +161,7 @@ async function guardarCaso(datos) {
                 dataPrevia = docExistente.data() || {};
             }
             // Si ahora tenemos RUT y antes existía un expediente temporal WA_<TELEFONO>, fusionamos sus datos y lo limpiamos
-            if (rutTitular && idTempTelefono && idExpediente !== idTempTelefono) {
+            if (!expedienteForzado && rutTitular && idTempTelefono && idExpediente !== idTempTelefono) {
                 const docTempRef = coleccionCasos.doc(idTempTelefono);
                 const docTempSnap = await docTempRef.get();
                 if (docTempSnap.exists) {
@@ -719,7 +722,23 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
         async contexto(jid) {
             const mem = await cargarDesdeFirestore(jid);
             const perfilSesion = await obtenerPerfilSesionCAJ(sessionId);
-            const casoExistente = await buscarCasoPorTelefono(mem.telefono, perfilSesion.uid);
+            let casoExistente = null;
+
+            if (mem.expedienteId) {
+                casoExistente = await obtenerCaso(mem.expedienteId);
+
+                if (!casoExistente) {
+                    throw new Error(
+                        'Expediente activo inexistente. No se cargan antecedentes de otra causa.'
+                    );
+                }
+
+                if (casoExistente.propietario_uid !== perfilSesion.uid) {
+                    throw new Error(
+                        'Acceso bloqueado: expediente activo pertenece a otro propietario.'
+                    );
+                }
+            }
             const asesor = await obtenerAsesor();
 
             if (casoExistente) {
@@ -793,8 +812,33 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 centro_caj: elegirValorNoVacio(mem.ficha.centro_caj, asesor.centro_caj, 'Centro de Atención Jurídica (CAJ)')
             };
 
+            let expedienteActivo = null;
+
+            if (mem.expedienteId) {
+                const casoActivo = await obtenerCaso(mem.expedienteId);
+
+                if (!casoActivo) {
+                    throw new Error(
+                        'El expediente activo no existe. Se bloquea la asociación automática.'
+                    );
+                }
+
+                if (casoActivo.propietario_uid !== perfilSesion.uid) {
+                    throw new Error(
+                        'Expediente activo pertenece a otro propietario.'
+                    );
+                }
+
+                expedienteActivo = casoActivo.id;
+            } else {
+                // Cada causa nueva recibe su propio identificador.
+                // No se reutiliza automaticamente el RUT o telefono.
+                expedienteActivo = `CAUSA_${require('node:crypto').randomUUID()}`;
+            }
+
             const casoGuardado = await guardarCaso({
                 ...mem.ficha,
+                id_expediente_forzado: expedienteActivo,
                 propietario_uid: perfilSesion.uid,
                 postulante_id: perfilSesion.postulante_id || mem.ficha.postulante_id,
                 canal: 'whatsapp',
