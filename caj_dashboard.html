@@ -271,6 +271,476 @@ body > header small {
     }
 }
 </style>
+<style id="ALUCILEX_DISENO_MODERNO_V1">
+:root {
+    --alx-azul: #071d39;
+    --alx-azul-secundario: #12365f;
+    --alx-amarillo: #f9c32d;
+    --alx-fondo: #f3f6fa;
+    --alx-borde: #dfe7f1;
+    --alx-texto: #142b49;
+}
+
+body {
+    background: var(--alx-fondo) !important;
+    color: var(--alx-texto);
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+body > header {
+    max-width: 1600px;
+    background: linear-gradient(
+        115deg,
+        #071a32,
+        #112e53
+    ) !important;
+    border-radius: 14px;
+    padding: 22px 28px;
+    box-shadow: 0 7px 22px rgba(9, 32, 62, .15);
+}
+
+body > header h1 {
+    color: #ffffff !important;
+    font-weight: 750;
+    letter-spacing: .25px;
+}
+
+.grid-container {
+    max-width: 1600px;
+    grid-template-columns:
+        minmax(300px, 360px)
+        minmax(0, 1fr);
+    gap: 20px;
+    align-items: start;
+}
+
+.card {
+    background: #ffffff;
+    border: 1px solid var(--alx-borde);
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(18, 42, 73, .06);
+    padding: 22px;
+    margin-bottom: 18px;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 750;
+    color: var(--alx-azul);
+    padding-bottom: 13px;
+    border-bottom: 1px solid var(--alx-borde);
+}
+
+#panelExpediente > .card-title {
+    background: linear-gradient(
+        110deg,
+        #ffffff,
+        #fff9e9
+    );
+    border: 1px solid #f1e4c8;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+#expedienteId {
+    font-family: "Segoe UI", Arial, sans-serif !important;
+    color: var(--alx-azul) !important;
+    font-size: clamp(18px, 2vw, 26px);
+    font-weight: 750;
+    overflow-wrap: anywhere;
+}
+
+#panelExpediente h3 {
+    font-size: 19px;
+    color: var(--alx-azul) !important;
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 13px 15px;
+    border-left: 4px solid var(--alx-amarillo);
+}
+
+label {
+    color: #344963;
+    font-weight: 650;
+    font-size: 12px;
+    margin-bottom: 6px;
+}
+
+input,
+select,
+textarea {
+    background: #ffffff;
+    border: 1px solid #d8e1ed;
+    border-radius: 9px;
+    min-height: 43px;
+    padding: 11px 12px;
+    color: var(--alx-texto);
+    font-size: 14px;
+    transition:
+        border-color .18s ease,
+        box-shadow .18s ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    border-color: #e6ad09;
+    box-shadow: 0 0 0 3px rgba(249, 195, 45, .16);
+}
+
+.btn {
+    border-radius: 10px;
+    font-weight: 700;
+    transition:
+        transform .15s ease,
+        box-shadow .15s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn-primary {
+    background: linear-gradient(
+        110deg,
+        #ffd34d,
+        #f5b912
+    );
+    color: #071d39;
+    border: 1px solid #e8ad12;
+    min-height: 46px;
+    box-shadow: 0 3px 8px rgba(207, 153, 6, .14);
+}
+
+.btn-primary:hover {
+    background: #f5bc21;
+    color: #071d39;
+}
+
+.btn-success {
+    background: #087c5e;
+    color: #ffffff;
+}
+
+.case-item {
+    background: #ffffff;
+    border: 1px solid var(--alx-borde);
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 9px;
+    transition:
+        background .15s ease,
+        border-color .15s ease;
+}
+
+.case-item:hover {
+    background: #fffdf5;
+    border-color: #e5bd4d;
+}
+
+.case-item.active {
+    background: #fff9e9;
+    border: 1.5px solid #f3b900;
+    box-shadow: 0 2px 9px rgba(205, 151, 8, .09);
+}
+
+.case-header {
+    color: var(--alx-azul);
+    font-size: 14px;
+}
+
+.case-meta {
+    color: #52657c;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+
+.badge {
+    border-radius: 18px;
+    padding: 4px 10px;
+}
+
+.case-list {
+    max-height: 580px;
+    padding-right: 3px;
+}
+
+#panelAdjuntos,
+#panelGeneracion {
+    border-top: 3px solid #f6c43b;
+}
+
+@media (max-width: 950px) {
+    .grid-container {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 580px) {
+    body {
+        padding: 9px;
+    }
+
+    body > header {
+        padding: 17px;
+    }
+
+    .card {
+        padding: 15px;
+    }
+
+    #panelExpediente > .card-title {
+        padding: 14px;
+    }
+}
+</style>
+<style id="ALUCILEX_CABECERA_TARJETAS_V2">
+
+/* Cabecera institucional */
+body > header {
+    min-height: 94px;
+    border-radius: 15px !important;
+    border-bottom: 3px solid #f5c328;
+    background: linear-gradient(
+        110deg,
+        #07172e 0%,
+        #0b2444 60%,
+        #14345a 100%
+    ) !important;
+}
+
+body > header h1 {
+    font-size: clamp(21px, 2.1vw, 29px) !important;
+    font-weight: 800 !important;
+    letter-spacing: .5px;
+}
+
+body > header h1::before {
+    content: "⚖";
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: 47px;
+    height: 47px;
+    margin-right: 13px;
+    background: #f9c62d;
+    color: #081e39;
+    border-radius: 50%;
+    vertical-align: middle;
+    font-size: 27px;
+}
+
+body > header small {
+    display: block;
+    margin-top: 7px;
+    margin-left: 60px;
+    color: #d9e7f5 !important;
+}
+
+/* Tarjetas de causas */
+#listaCasos {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 3px 4px 5px 0;
+}
+
+#listaCasos .case-item {
+    position: relative;
+    margin: 0;
+    border: 1px solid #dce5ef;
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 6px rgba(12, 35, 64, .035);
+}
+
+#listaCasos .case-item:hover {
+    border-color: #f0bd26;
+    background: #fffdf7;
+    box-shadow: 0 5px 14px rgba(15, 36, 64, .075);
+}
+
+#listaCasos .case-item.active {
+    border: 1.5px solid #efa900;
+    border-left: 5px solid #f1b90c;
+    background: #fffaf0;
+    box-shadow: 0 4px 12px rgba(171, 128, 20, .08);
+}
+
+#listaCasos .case-header {
+    gap: 9px;
+    align-items: flex-start;
+}
+
+#listaCasos .case-header strong {
+    font-size: 14px !important;
+    font-weight: 750;
+    color: #0b2343 !important;
+    overflow-wrap: anywhere;
+}
+
+#listaCasos .case-meta {
+    font-size: 12px !important;
+    line-height: 1.65 !important;
+    color: #52647c !important;
+    margin-top: 9px !important;
+}
+
+#listaCasos .badge {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 16px;
+}
+
+#listaCasos .btn-danger {
+    border-radius: 8px;
+    min-width: 33px;
+    min-height: 33px;
+}
+
+/* Encabezado del expediente seleccionado */
+#panelExpediente > .card-title {
+    border-left: 5px solid #f5c329;
+    background: linear-gradient(
+        100deg,
+        #fffaf0,
+        #ffffff
+    ) !important;
+}
+
+#expedienteId {
+    font-size: clamp(20px, 2.4vw, 29px) !important;
+    letter-spacing: -.4px;
+    font-weight: 800 !important;
+}
+
+/* Adaptación a pantallas pequeñas */
+@media (max-width: 650px) {
+    body > header h1::before {
+        width: 37px;
+        height: 37px;
+        font-size: 22px;
+        margin-right: 8px;
+    }
+
+    body > header small {
+        margin-left: 0;
+    }
+
+    #listaCasos .case-item {
+        padding: 12px;
+    }
+}
+
+</style>
+<style id="ALUCILEX_FORMULARIOS_MODERNOS_V3">
+
+/* Identificación visual de secciones */
+#panelExpediente h3 {
+    display: flex;
+    align-items: center;
+    min-height: 58px;
+    background: linear-gradient(
+        100deg,
+        #102d50,
+        #173d65
+    ) !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-left: 5px solid #f6c53b !important;
+    border-radius: 11px;
+    padding: 15px 18px !important;
+    margin-top: 25px !important;
+    margin-bottom: 17px !important;
+    font-size: 17px !important;
+    font-weight: 750;
+    box-shadow: 0 3px 9px rgba(8, 29, 56, .10);
+}
+
+/* Distribución de formularios */
+#panelExpediente > div[style*="display:grid"],
+#panelExpediente > div[style*="display: grid"] {
+    gap: 15px !important;
+    margin-bottom: 20px;
+}
+
+/* Campos y etiquetas */
+#panelExpediente label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #334b66;
+    margin-bottom: 7px;
+    letter-spacing: .1px;
+}
+
+#panelExpediente input,
+#panelExpediente select,
+#panelExpediente textarea {
+    width: 100%;
+    border: 1px solid #d8e2ee;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #142b49;
+    font-size: 14px;
+    padding: 11px 13px;
+    min-height: 44px;
+}
+
+#panelExpediente input:hover,
+#panelExpediente select:hover,
+#panelExpediente textarea:hover {
+    border-color: #a5b9d0;
+}
+
+#panelExpediente input:focus,
+#panelExpediente select:focus,
+#panelExpediente textarea:focus {
+    border-color: #e7b11e;
+    box-shadow: 0 0 0 3px rgba(249, 195, 45, .15);
+    outline: none;
+}
+
+#panelExpediente input[readonly] {
+    background: #edf2f7;
+    color: #52647b;
+}
+
+/* Botones de acción */
+#panelExpediente .btn {
+    padding: 11px 17px;
+    min-height: 43px;
+    border-radius: 10px;
+    font-weight: 750;
+}
+
+#panelExpediente .btn-primary {
+    background: #f9c32d;
+    color: #092544;
+}
+
+#panelExpediente .btn-success {
+    background: #087d65;
+    color: #ffffff;
+}
+
+/* Diseño adaptable */
+@media (max-width: 650px) {
+    #panelExpediente h3 {
+        padding: 13px !important;
+        font-size: 15px !important;
+    }
+
+    #panelExpediente input,
+    #panelExpediente select,
+    #panelExpediente textarea {
+        font-size: 16px;
+    }
+}
+</style>
 </head>
 <body>
 
@@ -782,6 +1252,7 @@ body > header small {
         document.getElementById('panelExpediente').style.display = 'block';
         document.getElementById('panelAdjuntos').style.display = 'block';
         document.getElementById('panelGeneracion').style.display = 'block';
+        activarPestanaCAJ('personal');
 
         const nombre = caso.usuario_nombre || caso.nombre || caso.usuario?.nombre || '';
         const rut = caso.usuario_rut || (caso.rut_titular !== 'SIN-RUT' ? caso.rut_titular : '') || caso.usuario?.rut || '';
@@ -1588,6 +2059,192 @@ body > header small {
       console.error('[CAJ AUTH]', error.message);
     }
   });
+</script>
+<!-- ALUCILEX_PESTANAS_EXPEDIENTE_V1 -->
+<style>
+#alxPestanas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    margin: 15px 0 20px;
+    padding: 8px;
+    background: #eef3f9;
+    border: 1px solid #dce5ef;
+    border-radius: 12px;
+}
+#alxPestanas button {
+    border: 1px solid transparent;
+    border-radius: 9px;
+    padding: 12px 15px;
+    background: transparent;
+    color: #35516d;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    flex: 1 1 150px;
+}
+#alxPestanas button:hover {
+    background: #ffffff;
+}
+#alxPestanas button.activa {
+    background: #102e51;
+    border-color: #102e51;
+    color: #ffffff;
+    box-shadow: 0 3px 9px rgba(15,40,75,.12);
+}
+.alxSeccionFicha {
+    min-width: 0;
+}
+#alxGuardarFicha {
+    margin-top: 18px;
+}
+@media (max-width: 650px) {
+    #alxPestanas button {
+        flex: 1 1 calc(50% - 9px);
+        padding: 11px 7px;
+        font-size: 12px;
+    }
+}
+</style>
+
+<script>
+(function () {
+    'use strict';
+
+    let preparado = false;
+
+    function prepararPestanasCAJ() {
+        if (preparado) return;
+
+        const panel = document.getElementById('panelExpediente');
+        const adjuntos = document.getElementById('panelAdjuntos');
+        const gestion = document.getElementById('panelGeneracion');
+
+        if (!panel || !adjuntos || !gestion) return;
+
+        const tituloPersonal = Array.from(panel.querySelectorAll('h3'))
+            .find(el => el.textContent.includes('Antecedentes personales'));
+
+        const tituloJuridico = Array.from(panel.querySelectorAll('h3'))
+            .find(el => el.textContent.includes('Antecedentes jurídicos'));
+
+        const botonGuardar = panel.querySelector(
+            'button[onclick="guardarCambiosCausa()"]'
+        );
+
+        if (
+            !tituloPersonal ||
+            !tituloJuridico ||
+            !botonGuardar ||
+            tituloPersonal.parentElement !== panel ||
+            tituloJuridico.parentElement !== panel
+        ) {
+            console.error('ALUCILEX: estructura de fichas no compatible');
+            return;
+        }
+
+        const elementos = Array.from(panel.children);
+        const indicePersonal = elementos.indexOf(tituloPersonal);
+        const indiceJuridico = elementos.indexOf(tituloJuridico);
+
+        if (
+            indicePersonal < 0 ||
+            indiceJuridico <= indicePersonal ||
+            elementos.indexOf(botonGuardar) <= indiceJuridico
+        ) {
+            console.error('ALUCILEX: orden de las fichas no reconocido');
+            return;
+        }
+
+        const navegacion = document.createElement('nav');
+        navegacion.id = 'alxPestanas';
+        navegacion.setAttribute('aria-label', 'Secciones del expediente');
+
+        const pestañas = [
+            ['personal', '👤 Datos personales'],
+            ['juridica', '⚖️ Antecedentes jurídicos'],
+            ['documentos', '📎 Documentos'],
+            ['gestion', '📑 Gestión jurídica']
+        ];
+
+        for (const [clave, etiqueta] of pestañas) {
+            const boton = document.createElement('button');
+            boton.type = 'button';
+            boton.dataset.pestana = clave;
+            boton.textContent = etiqueta;
+            boton.addEventListener('click', function () {
+                activarPestanaCAJ(clave);
+            });
+            navegacion.appendChild(boton);
+        }
+
+        const seccionPersonal = document.createElement('section');
+        seccionPersonal.id = 'alxSeccionPersonal';
+        seccionPersonal.className = 'alxSeccionFicha';
+
+        const seccionJuridica = document.createElement('section');
+        seccionJuridica.id = 'alxSeccionJuridica';
+        seccionJuridica.className = 'alxSeccionFicha';
+
+        const pieGuardar = document.createElement('div');
+        pieGuardar.id = 'alxGuardarFicha';
+
+        const personales = elementos.slice(indicePersonal, indiceJuridico);
+        const juridicos = elementos.slice(indiceJuridico);
+
+        for (const elemento of personales) {
+            seccionPersonal.appendChild(elemento);
+        }
+
+        for (const elemento of juridicos) {
+            if (elemento === botonGuardar) continue;
+            seccionJuridica.appendChild(elemento);
+        }
+
+        pieGuardar.appendChild(botonGuardar);
+
+        panel.appendChild(navegacion);
+        panel.appendChild(seccionPersonal);
+        panel.appendChild(seccionJuridica);
+        panel.appendChild(pieGuardar);
+
+        preparado = true;
+    }
+
+    window.activarPestanaCAJ = function (nombre) {
+        prepararPestanasCAJ();
+
+        if (!preparado) return;
+
+        const personal = document.getElementById('alxSeccionPersonal');
+        const juridica = document.getElementById('alxSeccionJuridica');
+        const adjuntos = document.getElementById('panelAdjuntos');
+        const gestion = document.getElementById('panelGeneracion');
+        const guardar = document.getElementById('alxGuardarFicha');
+
+        personal.style.display = nombre === 'personal' ? '' : 'none';
+        juridica.style.display = nombre === 'juridica' ? '' : 'none';
+        adjuntos.style.display = nombre === 'documentos' ? 'block' : 'none';
+        gestion.style.display = nombre === 'gestion' ? 'block' : 'none';
+
+        guardar.style.display =
+            nombre === 'personal' || nombre === 'juridica'
+                ? ''
+                : 'none';
+
+        document.querySelectorAll('#alxPestanas button').forEach(boton => {
+            const activa = boton.dataset.pestana === nombre;
+            boton.classList.toggle('activa', activa);
+            boton.setAttribute('aria-pressed', String(activa));
+        });
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', prepararPestanasCAJ);
+    } else {
+        prepararPestanasCAJ();
+    }
+})();
 </script>
 </body>
 </html>
