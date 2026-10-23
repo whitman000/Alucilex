@@ -1176,7 +1176,105 @@ body > header small {
                 const elemento = document.getElementById(id);
                 if (!elemento) continue;
 
+                // CAJ_CARGA_UNIFICADA_FICHA_V1
                 let valor = valores[clave] ?? '';
+
+                const tieneValor = (dato) =>
+                    dato !== undefined &&
+                    dato !== null &&
+                    String(dato).trim() !== '';
+
+                const primerDato = (...opciones) =>
+                    opciones.find(tieneValor) ?? '';
+
+                if (!tieneValor(valor)) {
+                    if (grupo === 'ficha_personal') {
+                        const personales = {
+                            tipo_ingreso: primerDato(caso.tipo_ingreso),
+                            nombres: primerDato(
+                                caso.usuario?.nombres,
+                                caso.nombres
+                            ),
+                            apellido1: primerDato(
+                                caso.usuario?.apellido1,
+                                caso.apellido1
+                            ),
+                            apellido2: primerDato(
+                                caso.usuario?.apellido2,
+                                caso.apellido2
+                            ),
+                            sexo: primerDato(caso.sexo),
+                            fecha_nacimiento: primerDato(
+                                caso.fecha_nacimiento
+                            ),
+                            genero: primerDato(caso.genero),
+                            region: primerDato(caso.region),
+                            comuna: primerDato(
+                                caso.comuna,
+                                caso.usuario?.comuna
+                            ),
+                            telefono_fijo: primerDato(caso.telefono_fijo),
+                            telefono_recado: primerDato(caso.telefono_recado),
+                            email: primerDato(
+                                caso.email,
+                                caso.usuario?.email
+                            ),
+                            nacionalidad: primerDato(caso.nacionalidad),
+                            estado_civil: primerDato(caso.estado_civil),
+                            profesion: primerDato(
+                                caso.profesion,
+                                caso.usuario?.profesion
+                            ),
+                            etnia: primerDato(caso.etnia),
+                            representante_legal: primerDato(
+                                caso.representante_legal
+                            ),
+                            forma_ingreso: primerDato(caso.forma_ingreso)
+                        };
+
+                        valor = personales[clave] ?? '';
+                    }
+
+                    if (grupo === 'antecedentes_juridicos') {
+                        const juridicos = {
+                            numero_causa: primerDato(
+                                caso.numero_causa,
+                                caso.rit,
+                                caso.rol,
+                                caso.datos_causa?.numero_causa,
+                                caso.datos_causa?.rit
+                            ),
+                            ruc: primerDato(
+                                caso.ruc,
+                                caso.datos_causa?.ruc
+                            ),
+                            caratula: primerDato(
+                                caso.caratula,
+                                caso.datos_causa?.caratula
+                            ),
+                            calidad_procesal: primerDato(
+                                caso.calidad_procesal
+                            ),
+                            fecha_audiencia: primerDato(
+                                caso.fecha_audiencia
+                            ),
+                            estado_procesal: primerDato(
+                                caso.estado_procesal,
+                                caso.estado_atencion
+                            ),
+                            consulta_juridica: primerDato(
+                                caso.consulta_juridica,
+                                caso.relato_hechos,
+                                caso.relato
+                            ),
+                            observaciones_entrevista: primerDato(
+                                caso.observaciones_entrevista
+                            )
+                        };
+
+                        valor = juridicos[clave] ?? '';
+                    }
+                }
 
                 if (grupo === 'ficha_personal') {
                     if (clave === 'email' && !valor) {
@@ -1899,6 +1997,46 @@ body > header small {
         editar.className = 'btn btn-outline';
         editar.addEventListener('click', () => editarAsesorCAJ(p));
         accionesAsesor.appendChild(editar);
+        // CAJ_ELIMINAR_POSTULANTE_V1
+        if (p.rol !== 'coordinador') {
+          const eliminar = document.createElement('button');
+          eliminar.type = 'button';
+          eliminar.textContent = 'Eliminar';
+          eliminar.className = 'btn btn-outline';
+          eliminar.style.cssText =
+            'color:#b91c1c;border-color:#fca5a5;margin-left:6px';
+          eliminar.addEventListener('click', async () => {
+            const confirmar = confirm(
+              '¿Retirar a ' + (p.nombre || 'este postulante') +
+              ' de la nómina activa?\n\n' +
+              'Se conservarán sus expedientes. ' +
+              'Si tiene acceso vinculado, será desactivado.'
+            );
+            if (!confirmar) return;
+
+            eliminar.disabled = true;
+
+            try {
+              const respuesta = await fetch(
+                `${API_AUTH_BASE}/postulantes/${encodeURIComponent(p.id)}`,
+                { method: 'DELETE' }
+              );
+              const resultado = await respuesta.json();
+
+              if (!respuesta.ok || !resultado.ok) {
+                throw new Error(
+                  resultado.error || 'No se pudo retirar el postulante'
+                );
+              }
+
+              await cargarPostulantes();
+            } catch (error) {
+              alert(error.message);
+              eliminar.disabled = false;
+            }
+          });
+          accionesAsesor.appendChild(eliminar);
+        }
         fila.appendChild(accionesAsesor);
         if (p.estado_vinculacion !== 'vinculado' && !p.duplicado_de) {
           const boton = document.createElement('button');

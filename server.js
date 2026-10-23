@@ -960,6 +960,95 @@ app.put('/api/caj/postulantes/:id/editar', exigirCoordinadorCAJ, async (req, res
     }
 });
 
+// CAJ_ELIMINAR_POSTULANTE_V1
+app.delete('/api/caj/postulantes/:id', exigirCoordinadorCAJ, async (req, res) => {
+    try {
+        const id = String(req.params.id || '');
+
+        if (!/^[a-zA-Z0-9_-]{1,128}$/.test(id)) {
+            return res.status(400).json({
+                ok: false, error: 'Identificador invalido'
+            });
+        }
+
+        const col = dbFirestore.collection('postulantes_caj');
+        const ref = col.doc(id);
+
+        await dbFirestore.runTransaction(async tx => {
+            const snap = await tx.get(ref);
+
+            if (!snap.exists || snap.data().activo !== true) {
+                const err = new Error('Postulante inexistente o inactivo');
+                err.status = 404;
+                throw err;
+            }
+
+            const p = snap.data();
+
+            if (
+                p.rol === 'coordinador' ||
+                p.firebase_uid === req.usuarioFirebase.uid
+            ) {
+                const err = new Error(
+                    'No se permite eliminar la cuenta de coordinación ni la propia cuenta'
+                );
+                err.status = 403;
+                throw err;
+            }
+
+            const perfilRef = p.firebase_uid
+                ? dbFirestore.collection('usuarios_alucilex').doc(p.firebase_uid)
+                : null;
+
+            const perfilSnap = perfilRef
+                ? await tx.get(perfilRef)
+                : null;
+
+            if (perfilSnap && perfilSnap.exists) {
+                const perfil = perfilSnap.data();
+
+                if (
+                    Array.isArray(perfil.roles) &&
+                    perfil.roles.includes('coordinador')
+                ) {
+                    const err = new Error(
+                        'No se puede desactivar un coordinador'
+                    );
+                    err.status = 403;
+                    throw err;
+                }
+            }
+
+            tx.update(ref, {
+                activo: false,
+                estado_vinculacion: 'retirado',
+                eliminado_por_uid: req.usuarioFirebase.uid,
+                fecha_eliminacion: new Date()
+            });
+
+            if (perfilSnap && perfilSnap.exists) {
+                tx.update(perfilRef, {
+                    activo: false,
+                    actualizadoEn: new Date()
+                });
+            }
+        });
+
+        res.json({
+            ok: true,
+            mensaje: 'Postulante retirado de la nómina activa'
+        });
+    } catch (error) {
+        console.error('[CAJ RETIRO POSTULANTE]', error.message);
+        res.status(error.status || 500).json({
+            ok: false,
+            error: error.status
+                ? error.message
+                : 'No fue posible retirar al postulante'
+        });
+    }
+});
+
 // CAJ_ALTA_FIREBASE_V1 - Solo coordinacion autorizada.
 app.post('/api/caj/postulantes/:id/activar', exigirCoordinadorCAJ, async (req, res) => {
   try {
