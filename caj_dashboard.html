@@ -1354,7 +1354,18 @@ body > header small {
 
         const nombre = caso.usuario_nombre || caso.nombre || caso.usuario?.nombre || '';
         const rut = caso.usuario_rut || (caso.rut_titular !== 'SIN-RUT' ? caso.rut_titular : '') || caso.usuario?.rut || '';
-        const telefono = caso.telefono_contacto || caso.telefono || caso.usuario?.telefono || '';
+        // CAJ_NUMERO_REAL_LID_V1
+        const telefonoCandidato =
+            caso.telefono_verificado ||
+            caso.telefono_contacto ||
+            caso.telefono ||
+            caso.usuario?.telefono ||
+            '';
+
+        const telefono =
+            /^\d{8,15}$/.test(String(telefonoCandidato))
+                ? String(telefonoCandidato)
+                : '';
         const domicilio = caso.domicilio || caso.usuario?.domicilio || '';
         const contraparte = caso.contraparte_nombre || (typeof caso.contraparte === 'string' ? caso.contraparte : caso.contraparte?.nombre) || '';
         const materia = caso.materia || caso.datos_causa?.materia || 'Otra';

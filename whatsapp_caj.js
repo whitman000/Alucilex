@@ -853,6 +853,43 @@ async function crearSesionBaileys(sessionId, generacion) {
 
             const senderJid = msg.key.remoteJid || '';
 
+            // CAJ_CONSULTA_LID_PN_V2
+            // Consulta la correspondencia almacenada por Baileys.
+            // No modifica mensajes, expedientes ni credenciales.
+            if (senderJid.endsWith('@lid')) {
+                try {
+                    const obtenerPN =
+                        sock.signalRepository?.lidMapping?.getPNForLID;
+
+                    const pn = typeof obtenerPN === 'function'
+                        ? await obtenerPN.call(
+                            sock.signalRepository.lidMapping,
+                            senderJid
+                        )
+                        : null;
+
+                    const coincidencia = String(pn || '')
+                        .match(/^(\d+)@s\.whatsapp\.net$/);
+
+                    console.log('[CAJ MAPEO LID-PN]', {
+                        sessionId,
+                        fromMe: Boolean(msg.key.fromMe),
+                        lidFinal: senderJid.split('@')[0].slice(-4),
+                        resultado: coincidencia
+                            ? 'Telefono asociado disponible'
+                            : 'Telefono no disponible en cache',
+                        telefonoFinal: coincidencia
+                            ? coincidencia[1].slice(-4)
+                            : null
+                    });
+                } catch (error) {
+                    console.warn(
+                        '[CAJ MAPEO LID-PN] Consulta no disponible:',
+                        error.message
+                    );
+                }
+            }
+
             // CAJ_DIAGNOSTICO_LID_PN_V1
             // Solo diagnóstico: no modifica la identidad ni el expediente.
             if (senderJid.endsWith('@lid')) {
@@ -1120,7 +1157,23 @@ async function crearSesionBaileys(sessionId, generacion) {
                 `[CAJ WHATSAPP] Mensaje recibido de ${delAsesor ? 'ASESOR' : 'CLIENTE'}: ${numeroRemitente}`
             );
 
+            // CAJ_NUMERO_REAL_LID_V1
+            // No convertir el identificador LID en telefono.
+            const telefonoAlternativo = String(
+                msg.key.remoteJidAlt || ''
+            );
+
+            const telefonoVerificado =
+                senderJid.endsWith('@lid') &&
+                /^\d{8,15}@s\.whatsapp\.net$/.test(telefonoAlternativo)
+                    ? telefonoAlternativo.split('@')[0]
+                    : senderJid.endsWith('@s.whatsapp.net') &&
+                      /^\d{8,15}@s\.whatsapp\.net$/.test(senderJid)
+                        ? senderJid.split('@')[0]
+                        : '';
+
             const mensajeNormalizado = {
+                telefonoVerificado,
                 jid: senderJid,
                 id: msgId,
                 delAsesor,

@@ -64,6 +64,13 @@ function normalizarRUT(rut) {
  * Limpia un número de teléfono dejando formato chileno estándar (ej: 56912345678)
  */
 function normalizarTelefono(telefono) {
+    // CAJ_PROTECCION_LID_TELEFONO_V1
+    // Un LID identifica un chat, no acredita un telefono.
+    const identificador = String(telefono || '').trim().toLowerCase();
+
+    if (identificador.endsWith('@lid')) {
+        return '';
+    }
     if (!telefono) return '';
     let limpio = String(telefono).split('@')[0].replace(/[^0-9]/g, '');
     if (limpio.length === 9 && limpio.startsWith('9')) {
@@ -922,6 +929,36 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
         async incorporar(mensaje, resultado = {}) {
             const { jid, delAsesor } = mensaje;
             const mem = await cargarDesdeFirestore(jid);
+            // CAJ_NUMERO_REAL_LID_V1
+            // Identidad de chat y telefono son datos diferentes.
+            const telefonoEntrante = String(
+                mensaje.telefonoVerificado || ''
+            );
+
+            if (telefonoEntrante && !/^\d{8,15}$/.test(telefonoEntrante)) {
+                throw new Error('Telefono alternativo invalido');
+            }
+
+            const telefonoAnterior = String(
+                mem.ficha.telefono_verificado || ''
+            );
+
+            if (
+                telefonoEntrante &&
+                telefonoAnterior &&
+                telefonoEntrante !== telefonoAnterior
+            ) {
+                throw new Error(
+                    'Conflicto de identidad telefonica en la conversacion'
+                );
+            }
+
+            if (telefonoEntrante) {
+                mem.telefono = telefonoEntrante;
+                mem.ficha.telefono_verificado = telefonoEntrante;
+                mem.ficha.telefono = telefonoEntrante;
+            }
+
             const extraidos = resultado.datos_extraidos || {};
             const asesor = await obtenerAsesor();
             const perfilSesion = await obtenerPerfilSesionCAJ(sessionId);
