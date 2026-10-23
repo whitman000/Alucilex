@@ -723,7 +723,11 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
         if (!memoriaLocal.has(jid)) {
             memoriaLocal.set(jid, {
                 jid,
-                telefono: normalizarTelefono(jid),
+                // CAJ_PROTECCION_TELEFONO_LID_V6
+                // El LID nunca se interpreta como telefono.
+                telefono: String(jid).endsWith('@lid')
+                    ? ''
+                    : normalizarTelefono(jid),
                 pausado: false,
                 mensajesVistos: new Set(),
                 salidasPropias: new Set(),
@@ -1004,7 +1008,12 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 ...mem.ficha,
                 usuario_nombre: elegirValorNoVacio(extraidos.usuario_nombre, mem.ficha.usuario_nombre, 'Usuario CAJ'),
                 usuario_rut: elegirValorNoVacio(normalizarRUT(extraidos.usuario_rut), mem.ficha.usuario_rut, ''),
-                telefono: mem.telefono,
+                // CAJ_CONSERVAR_TELEFONO_V7
+                telefono: elegirValorNoVacio(
+                    mem.telefono,
+                    mem.ficha.telefono,
+                    ''
+                ),
                 domicilio: elegirValorNoVacio(extraidos.domicilio, mem.ficha.domicilio, ''),
                 comuna: elegirValorNoVacio(extraidos.comuna, mem.ficha.comuna, ''),
                 profesion: elegirValorNoVacio(extraidos.profesion, mem.ficha.profesion, ''),
