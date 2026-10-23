@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const fs = require('fs');
 const path = require('path');
@@ -123,7 +123,7 @@ function restaurar(paquete, carpetaDestino, clave) {
                 !s ||
                 s === '.' ||
                 s === '..' ||
-                !/^[a-zA-Z0-9_.-]+$/.test(s)
+                !/^[^/\\\x00-\x1F\x7F]+$/.test(s)
             )
         ) {
             throw new Error('Ruta de archivo invalida');
