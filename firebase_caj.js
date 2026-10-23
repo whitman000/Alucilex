@@ -347,6 +347,70 @@ async function guardarCaso(datos) {
             fecha_actualizacion: new Date()
         };
 
+        // CAJ_FICHA_ESTRUCTURADA_V1
+        // Campos adicionales independientes para cada expediente.
+        const camposPersonales = [
+            'tipo_ingreso',
+            'nombres',
+            'apellido1',
+            'apellido2',
+            'sexo',
+            'fecha_nacimiento',
+            'edad',
+            'genero',
+            'region',
+            'comuna',
+            'telefono_fijo',
+            'telefono_recado',
+            'email',
+            'nacionalidad',
+            'estado_civil',
+            'profesion',
+            'etnia',
+            'representante_legal',
+            'forma_ingreso'
+        ];
+
+        const camposJuridicos = [
+            'numero_causa',
+            'ruc',
+            'caratula',
+            'calidad_procesal',
+            'fecha_audiencia',
+            'estado_procesal',
+            'consulta_juridica',
+            'observaciones_entrevista'
+        ];
+
+        function consolidarCampos(campos, grupo) {
+            const anteriores = dataPrevia[grupo] || {};
+            const nuevos = datos[grupo] || {};
+            const resultado = { ...anteriores };
+
+            for (const campo of campos) {
+                const valor = nuevos[campo] ?? datos[campo];
+
+                if (
+                    valor !== undefined &&
+                    valor !== null &&
+                    String(valor).trim() !== ''
+                ) {
+                    resultado[campo] = valor;
+                }
+            }
+
+            return resultado;
+        }
+
+        registro.ficha_personal = consolidarCampos(
+            camposPersonales,
+            'ficha_personal'
+        );
+
+        registro.antecedentes_juridicos = consolidarCampos(
+            camposJuridicos,
+            'antecedentes_juridicos'
+        );
         if (!dataPrevia.fecha_ingreso) {
             registro.fecha_ingreso = new Date();
         } else {
@@ -432,10 +496,59 @@ async function listarCasos() {
 
 async function actualizarCaso(id, datos) {
     try {
+        // CAJ_ACTUALIZACION_FICHAS_SEGURA_V1
+        // Actualiza cada casillero sin reemplazar el grupo completo.
+        const actualizacion = { ...datos };
+
+        const camposPermitidos = {
+            ficha_personal: [
+                'tipo_ingreso', 'nombres', 'apellido1', 'apellido2',
+                'sexo', 'fecha_nacimiento', 'edad', 'genero',
+                'region', 'comuna', 'telefono_fijo', 'telefono_recado',
+                'email', 'nacionalidad', 'estado_civil', 'profesion',
+                'etnia', 'representante_legal', 'forma_ingreso'
+            ],
+            antecedentes_juridicos: [
+                'numero_causa', 'ruc', 'caratula',
+                'calidad_procesal', 'fecha_audiencia',
+                'estado_procesal', 'consulta_juridica',
+                'observaciones_entrevista'
+            ]
+        };
+
+        for (const [grupo, permitidos] of Object.entries(camposPermitidos)) {
+            if (!Object.prototype.hasOwnProperty.call(actualizacion, grupo)) {
+                continue;
+            }
+
+            const campos = actualizacion[grupo];
+
+            if (
+                !campos ||
+                typeof campos !== 'object' ||
+                Array.isArray(campos)
+            ) {
+                throw new Error('Estructura inválida: ' + grupo);
+            }
+
+            delete actualizacion[grupo];
+
+            for (const [campo, valor] of Object.entries(campos)) {
+                if (!permitidos.includes(campo)) {
+                    throw new Error('Campo no permitido: ' + grupo + '.' + campo);
+                }
+
+                if (valor !== undefined && valor !== null) {
+                    actualizacion[`${grupo}.${campo}`] = valor;
+                }
+            }
+        }
+
         await coleccionCasos.doc(id).update({
-            ...datos,
+            ...actualizacion,
             actualizadoEn: new Date()
         });
+
         return { id, ...datos };
     } catch (error) {
         console.error("Error al actualizar expediente:", error);
@@ -634,7 +747,22 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                     for (const idSal of data.salidasPropias) mem.salidasPropias.add(idSal);
                 }
                 if (data.ficha && typeof data.ficha === 'object') {
-                    mem.ficha = { ...data.ficha, ...mem.ficha };
+                    // CAJ_RECUPERACION_FICHAS_PROTEGIDA_V1
+                    const fichaLocal = mem.ficha || {};
+                    const fichaRemota = data.ficha || {};
+
+                    mem.ficha = {
+                        ...fichaRemota,
+                        ...fichaLocal,
+                        ficha_personal: {
+                            ...(fichaRemota.ficha_personal || {}),
+                            ...(fichaLocal.ficha_personal || {})
+                        },
+                        antecedentes_juridicos: {
+                            ...(fichaRemota.antecedentes_juridicos || {}),
+                            ...(fichaLocal.antecedentes_juridicos || {})
+                        }
+                    };
                 }
                 if (data.expedienteId) {
                     mem.expedienteId = data.expedienteId;
@@ -744,6 +872,16 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
             if (casoExistente) {
                 mem.expedienteId = casoExistente.id;
                 mem.ficha = {
+                    // CAJ_MEMORIA_FICHAS_V1
+                    ...mem.ficha,
+                    ficha_personal: {
+                        ...(mem.ficha.ficha_personal || {}),
+                        ...(casoExistente.ficha_personal || {})
+                    },
+                    antecedentes_juridicos: {
+                        ...(mem.ficha.antecedentes_juridicos || {}),
+                        ...(casoExistente.antecedentes_juridicos || {})
+                    },
                     usuario_nombre: elegirValorNoVacio(mem.ficha.usuario_nombre, casoExistente.usuario_nombre),
                     usuario_rut: elegirValorNoVacio(mem.ficha.usuario_rut, casoExistente.rut_titular),
                     domicilio: elegirValorNoVacio(mem.ficha.domicilio, casoExistente.usuario?.domicilio),
@@ -793,6 +931,8 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
             const hechosUnificados = Array.from(new Set([...hechosPrevios, ...hechosNuevos].map(h => String(h || '').trim()).filter(Boolean)));
 
             mem.ficha = {
+                // Conservar campos anteriores de la entrevista
+                ...mem.ficha,
                 usuario_nombre: elegirValorNoVacio(extraidos.usuario_nombre, mem.ficha.usuario_nombre, 'Usuario CAJ'),
                 usuario_rut: elegirValorNoVacio(normalizarRUT(extraidos.usuario_rut), mem.ficha.usuario_rut, ''),
                 telefono: mem.telefono,
@@ -812,6 +952,37 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 centro_caj: elegirValorNoVacio(mem.ficha.centro_caj, asesor.centro_caj, 'Centro de Atención Jurídica (CAJ)')
             };
 
+            // CAJ_IA_CAMPOS_FICHA_V1
+            // Integra datos provenientes de mensajes escritos o audios transcritos.
+            const gruposIA = [
+                'ficha_personal',
+                'antecedentes_juridicos'
+            ];
+
+            for (const grupo of gruposIA) {
+                const anteriores = mem.ficha[grupo] || {};
+                const recibidos = extraidos[grupo] || {};
+
+                if (
+                    typeof recibidos !== 'object' ||
+                    Array.isArray(recibidos)
+                ) {
+                    continue;
+                }
+
+                const consolidados = { ...anteriores };
+
+                for (const [campo, valor] of Object.entries(recibidos)) {
+                    if (
+                        typeof valor === 'string' &&
+                        valor.trim() !== ''
+                    ) {
+                        consolidados[campo] = valor.trim();
+                    }
+                }
+
+                mem.ficha[grupo] = consolidados;
+            }
             let expedienteActivo = null;
 
             if (mem.expedienteId) {

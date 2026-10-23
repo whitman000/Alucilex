@@ -427,6 +427,52 @@ body > header small {
                 <span id="badgeMateria" class="badge"></span>
             </div>
 
+            <!-- CAJ_FICHA_AMPLIADA_V1 -->
+            <h3 style="margin:18px 0 10px;color:#1e3c72;">
+                👤 Antecedentes personales
+            </h3>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
+                <div><label>Tipo de ingreso</label><input id="fichaTipoIngreso" type="text"></div>
+                <div><label>Nombres</label><input id="fichaNombres" type="text"></div>
+                <div><label>Primer apellido</label><input id="fichaApellido1" type="text"></div>
+                <div><label>Segundo apellido</label><input id="fichaApellido2" type="text"></div>
+                <div><label>Sexo</label><input id="fichaSexo" type="text"></div>
+                <div><label>Fecha de nacimiento</label><input id="fichaNacimiento" type="date"></div>
+                <div><label>Edad</label><input id="fichaEdad" type="number" min="0" max="125" readonly></div>
+                <div><label>Género</label><input id="fichaGenero" type="text"></div>
+                <div><label>Región</label><input id="fichaRegion" type="text"></div>
+                <div><label>Comuna</label><input id="fichaComuna" type="text"></div>
+                <div><label>Teléfono fijo</label><input id="fichaTelefonoFijo" type="tel"></div>
+                <div><label>Teléfono de recado</label><input id="fichaTelefonoRecado" type="tel"></div>
+                <div><label>Correo electrónico</label><input id="fichaEmail" type="email"></div>
+                <div><label>Nacionalidad</label><input id="fichaNacionalidad" type="text"></div>
+                <div><label>Estado civil</label><input id="fichaEstadoCivil" type="text"></div>
+                <div><label>Profesión u oficio</label><input id="fichaProfesion" type="text"></div>
+                <div><label>Pertenencia indígena / etnia (opcional)</label><input id="fichaEtnia" type="text"></div>
+                <div><label>Representante legal (si corresponde)</label><input id="fichaRepresentante" type="text"></div>
+                <div><label>Forma de ingreso</label><input id="fichaFormaIngreso" type="text"></div>
+            </div>
+
+            <h3 style="margin:24px 0 10px;color:#1e3c72;">
+                ⚖️ Antecedentes jurídicos
+            </h3>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;">
+                <div><label>Número de causa / RIT / Rol</label><input id="jurNumeroCausa" type="text"></div>
+                <div><label>RUC (si corresponde)</label><input id="jurRuc" type="text"></div>
+                <div><label>Carátula</label><input id="jurCaratula" type="text"></div>
+                <div><label>Calidad procesal</label><input id="jurCalidad" type="text"></div>
+                <div><label>Fecha de audiencia</label><input id="jurAudiencia" type="date"></div>
+                <div><label>Estado procesal</label><input id="jurEstado" type="text"></div>
+            </div>
+            <label>Consulta jurídica</label>
+            <textarea id="jurConsulta" rows="3"></textarea>
+            <label>Observaciones de entrevista</label>
+            <textarea id="jurObservaciones" rows="3"></textarea>
+            <p style="font-size:12px;color:#64748b;">
+                La materia, el tribunal, la contraparte y el relato de hechos
+                se encuentran en los campos existentes del expediente.
+                Los nuevos campos se conectarán a Firebase en el siguiente paso.
+            </p>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                 <div>
                     <label>Usuario / Demandante:</label>
@@ -598,6 +644,124 @@ body > header small {
     }
 
     // SELECCIONAR CASO Y DESPLEGAR INDIVIDUALIZACIÓN Y DOCUMENTOS
+    // CAJ_CONEXION_FICHAS_V1
+    const camposFichaCAJ = {
+        ficha_personal: {
+            tipo_ingreso: 'fichaTipoIngreso',
+            nombres: 'fichaNombres',
+            apellido1: 'fichaApellido1',
+            apellido2: 'fichaApellido2',
+            sexo: 'fichaSexo',
+            fecha_nacimiento: 'fichaNacimiento',
+            edad: 'fichaEdad',
+            genero: 'fichaGenero',
+            region: 'fichaRegion',
+            comuna: 'fichaComuna',
+            telefono_fijo: 'fichaTelefonoFijo',
+            telefono_recado: 'fichaTelefonoRecado',
+            email: 'fichaEmail',
+            nacionalidad: 'fichaNacionalidad',
+            estado_civil: 'fichaEstadoCivil',
+            profesion: 'fichaProfesion',
+            etnia: 'fichaEtnia',
+            representante_legal: 'fichaRepresentante',
+            forma_ingreso: 'fichaFormaIngreso'
+        },
+        antecedentes_juridicos: {
+            numero_causa: 'jurNumeroCausa',
+            ruc: 'jurRuc',
+            caratula: 'jurCaratula',
+            calidad_procesal: 'jurCalidad',
+            fecha_audiencia: 'jurAudiencia',
+            estado_procesal: 'jurEstado',
+            consulta_juridica: 'jurConsulta',
+            observaciones_entrevista: 'jurObservaciones'
+        }
+    };
+
+    function calcularEdadFichaCAJ(fecha) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha || '')) return '';
+        const nacimiento = new Date(fecha + 'T12:00:00');
+        if (Number.isNaN(nacimiento.getTime())) return '';
+
+        const hoy = new Date();
+        let edad = hoy.getFullYear() - nacimiento.getFullYear();
+
+        if (
+            hoy.getMonth() < nacimiento.getMonth() ||
+            (hoy.getMonth() === nacimiento.getMonth() &&
+             hoy.getDate() < nacimiento.getDate())
+        ) edad--;
+
+        return edad >= 0 && edad <= 125 ? edad : '';
+    }
+
+    function cargarFichasCAJ(caso) {
+        for (const [grupo, campos] of Object.entries(camposFichaCAJ)) {
+            const valores = caso[grupo] || {};
+
+            for (const [clave, id] of Object.entries(campos)) {
+                const elemento = document.getElementById(id);
+                if (!elemento) continue;
+
+                let valor = valores[clave] ?? '';
+
+                if (grupo === 'ficha_personal') {
+                    if (clave === 'email' && !valor) {
+                        valor = caso.usuario?.email || caso.email || '';
+                    }
+                    if (clave === 'comuna' && !valor) {
+                        valor = caso.usuario?.comuna || '';
+                    }
+                    if (clave === 'profesion' && !valor) {
+                        valor = caso.usuario?.profesion || '';
+                    }
+                    if (clave === 'edad') {
+                        valor = calcularEdadFichaCAJ(
+                            valores.fecha_nacimiento || ''
+                        );
+                    }
+                }
+
+                elemento.value = valor;
+            }
+        }
+    }
+
+    function obtenerFichasCAJ() {
+        const resultado = {};
+
+        for (const [grupo, campos] of Object.entries(camposFichaCAJ)) {
+            resultado[grupo] = {};
+
+            for (const [clave, id] of Object.entries(campos)) {
+                const elemento = document.getElementById(id);
+                if (!elemento) {
+                    throw new Error('Falta el campo del panel: ' + id);
+                }
+
+                resultado[grupo][clave] =
+                    clave === 'edad'
+                    ? calcularEdadFichaCAJ(
+                        document.getElementById('fichaNacimiento').value
+                      )
+                    : elemento.value.trim();
+            }
+        }
+
+        return resultado;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const nacimiento = document.getElementById('fichaNacimiento');
+        const edad = document.getElementById('fichaEdad');
+
+        if (nacimiento && edad) {
+            nacimiento.addEventListener('change', () => {
+                edad.value = calcularEdadFichaCAJ(nacimiento.value);
+            });
+        }
+    });
     function seleccionarCaso(casoOId) {
         let caso = casoOId;
         if (typeof casoOId === 'string') {
@@ -607,6 +771,7 @@ body > header small {
 
         casoActivoId = caso.id;
         casoActivoData = caso;
+        cargarFichasCAJ(caso);
 
         document.querySelectorAll('.case-item').forEach(el => {
             el.classList.toggle('active', el.innerHTML.includes(caso.id));
@@ -791,6 +956,7 @@ body > header small {
             relato_hechos: document.getElementById('editHechos').value.trim(),
             hechos: [document.getElementById('editHechos').value.trim()]
         };
+        Object.assign(payload, obtenerFichasCAJ());
         try {
             const res = await fetch(`${API_BASE}/casos/${casoActivoId}`, {
                 method: 'PUT',

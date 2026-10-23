@@ -97,10 +97,35 @@ TU DOBLE MISIÓN EN CADA MENSAJE:
    - Revisa qué datos de la ficha o de los hechos FALTAN todavía:
      a) Datos personales indispensables: Nombre completo, RUT, Dirección y Comuna (y profesión/oficio).
      b) Los hechos importantes del caso: qué sucedió, cuándo ocurrió, quién es la contraparte/demandado y qué necesita lograr.
-   - Guía al cliente con calidez, claridad y orden (haciendo 1 o 2 preguntas claras a la vez para no abrumarlo) hasta completar su ficha y el relato de los hechos.
+   - Realiza EXACTAMENTE UNA PREGUNTA POR MENSAJE y espera la respuesta del cliente antes de avanzar.
+   - En la bienvenida, preséntate como asistente virtual de recepción jurídica, explica brevemente que completarás su ficha y pregunta solamente por sus nombres.
+   - Orden de identificación: nombres, primer apellido, segundo apellido, RUT, sexo, fecha de nacimiento, género, dirección, región, comuna, teléfonos, correo, nacionalidad, estado civil y profesión u oficio.
+   - Después continúa con los antecedentes jurídicos: motivo de consulta, materia, existencia de causa judicial, tribunal, número de causa o RIT, RUC, calidad procesal, audiencia y hechos.
+   - Pregunta únicamente por el siguiente dato pendiente. Si el cliente proporciona varios datos espontáneamente, extráelos sin volver a preguntarlos.
+   - Acepta respuestas como no corresponde, no sabe o prefiere no informar cuando sea pertinente.
+   - No inventes datos personales, tribunales, números de causa ni fechas.
+   - Si aparece una audiencia o plazo judicial próximo, registra la urgencia para revisión del asesor.
+   - Cuando intervenga el asesor jurídico, conserva el modo silencioso y extrae los antecedentes sin enviar preguntas al cliente.
    - Cuando ya tengas Nombre, RUT, Dirección y el relato claro de los hechos, confírmale que su ficha y antecedentes quedaron registrados en el sistema para revisión directa del asesor jurídico ${nombreAsesor}.
    - NO incluyas el encabezado institucional en el campo "cuerpo_respuesta" porque el sistema lo estampará automáticamente arriba de tu mensaje.
 
+REGLAS DE EXTRACCION PARA LOS NUEVOS PANELES:
+- CAJ_ENTREVISTA_FICHAS_V2
+- Extrae antecedentes tanto de mensajes escritos como de audios ya transcritos.
+- Completa ficha_personal y antecedentes_juridicos con los nombres exactos de campos indicados en el JSON.
+- Si el cliente expresa el motivo de su consulta, regístralo en antecedentes_juridicos.consulta_juridica, aunque también identifiques la materia. No inventes detalles.
+- Un campo no mencionado debe quedar como cadena vacia; nunca inventes datos.
+- No utilices los datos de ejemplo o prueba como antecedentes de un cliente.
+- Conserva tambien los campos originales usuario_nombre, usuario_rut, domicilio, materia, tribunal, hechos y relato_hechos para compatibilidad.
+- Extrae varios datos cuando el cliente los entregue espontaneamente, pero formula EXACTAMENTE UNA pregunta por mensaje.
+- Pregunta solo por datos pendientes. No repitas una pregunta ya respondida.
+- Si el cliente desconoce un dato, no insistas; continua con el siguiente antecedente.
+- No presupongas que existe una causa judicial: pregunta primero si hay un procedimiento en curso.
+- Solicita numero de causa, tribunal, RUC y fecha de audiencia solo cuando corresponda.
+- Las fechas de nacimiento y audiencia deben usar el formato AAAA-MM-DD cuando sean conocidas con certeza.
+- La edad se obtiene a partir de la fecha de nacimiento; no la inventes.
+- Si el asesor interviene y el modo es silencioso, extrae datos sin enviar ninguna pregunta.
+- No mezcles antecedentes de diferentes causas o expedientes.
 DEBES RESPONDER EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA EXACTA (sin bloques markdown adicionales):
 {
   "datos_extraidos": {
@@ -117,7 +142,37 @@ DEBES RESPONDER EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA EX
     "contraparte_domicilio": "string o vacío",
     "hechos": ["hecho 1", "hecho 2"],
     "relato_hechos": "resumen narrativo completo y acumulado de los hechos del caso",
-    "ficha_completa": false
+    "ficha_personal": {
+      "tipo_ingreso": "",
+      "nombres": "",
+      "apellido1": "",
+      "apellido2": "",
+      "sexo": "",
+      "fecha_nacimiento": "",
+      "edad": "",
+      "genero": "",
+      "region": "",
+      "comuna": "",
+      "telefono_fijo": "",
+      "telefono_recado": "",
+      "email": "",
+      "nacionalidad": "",
+      "estado_civil": "",
+      "profesion": "",
+      "etnia": "",
+      "representante_legal": "",
+      "forma_ingreso": ""
+    },
+    "antecedentes_juridicos": {
+      "numero_causa": "",
+      "ruc": "",
+      "caratula": "",
+      "calidad_procesal": "",
+      "fecha_audiencia": "",
+      "estado_procesal": "",
+      "consulta_juridica": "",
+      "observaciones_entrevista": ""
+    },    "ficha_completa": false
   },
   "cuerpo_respuesta": "Texto de tu respuesta guiando al cliente (o cadena vacía si silencioso es true)"
 }`;
@@ -155,11 +210,56 @@ Devuelve únicamente el JSON solicitado.`;
         const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
         const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawContent);
 
+        // CAJ_FUSION_CAMPOS_IA_V1
+        const respuestaIA = parsed.datos_extraidos || {};
+
         const datosExtraidos = {
             ...baseHeuristica,
-            ...(parsed.datos_extraidos || {})
+            ...respuestaIA
         };
 
+        for (const grupo of ['ficha_personal', 'antecedentes_juridicos']) {
+            const anteriores = baseHeuristica[grupo] || {};
+            const nuevos = respuestaIA[grupo] || {};
+            const consolidados = { ...anteriores };
+
+            if (
+                nuevos &&
+                typeof nuevos === 'object' &&
+                !Array.isArray(nuevos)
+            ) {
+                for (const [campo, valor] of Object.entries(nuevos)) {
+                    if (
+                        typeof valor === 'string' &&
+                        valor.trim() !== ''
+                    ) {
+                        consolidados[campo] = valor.trim();
+                    }
+                }
+            }
+
+            datosExtraidos[grupo] = consolidados;
+        }
+
+        // CAJ_SINCRONIZACION_PANEL_V1
+        // Compatibilidad entre campos tradicionales y ficha personal.
+        const personalSincronizada = {
+            ...(datosExtraidos.ficha_personal || {})
+        };
+
+        for (const campo of ['comuna', 'profesion', 'email']) {
+            const valor = datosExtraidos[campo];
+
+            if (
+                !String(personalSincronizada[campo] || '').trim() &&
+                typeof valor === 'string' &&
+                valor.trim()
+            ) {
+                personalSincronizada[campo] = valor.trim();
+            }
+        }
+
+        datosExtraidos.ficha_personal = personalSincronizada;
         // Asegurar que cualquier hecho nuevo o relato del cliente no se pierda nunca
         if (!delAsesor && texto && texto !== '[INICIO_ATENCION_CAJ]') {
             const listaHechos = Array.isArray(datosExtraidos.hechos) ? datosExtraidos.hechos : [];
@@ -204,15 +304,39 @@ Devuelve únicamente el JSON solicitado.`;
             return { datos_extraidos: datosRespaldo, respuesta_humana: '' };
         }
 
-        const faltantes = [];
-        if (!datosRespaldo.usuario_nombre || datosRespaldo.usuario_nombre === 'Usuario CAJ') faltantes.push('*Nombre completo*');
-        if (!datosRespaldo.usuario_rut) faltantes.push('*RUT*');
-        if (!datosRespaldo.domicilio) faltantes.push('*Dirección y comuna*');
+        // CAJ_FALLBACK_UNA_PREGUNTA_V1
+        // Una pregunta por turno incluso cuando OpenRouter no responde.
+        const personal = datosRespaldo.ficha_personal || {};
+        const juridico = datosRespaldo.antecedentes_juridicos || {};
 
-        const mensajeFallback = faltantes.length > 0
-            ? `Bienvenido/a a nuestro canal de recepción jurídica. Para armar su ficha de atención y entregar sus antecedentes al asesor jurídico *${nombreAsesor}*, por favor indíqueme:\n\n1. ${faltantes.join(', ')}\n2. Un relato breve de *los hechos de su caso* (qué ocurrió, fechas aproximadas y qué necesita resolver).`
-            : `Muchas gracias. He registrado su mensaje en su ficha de atención para el asesor jurídico *${nombreAsesor}*. ¿Desea agregar algún otro hecho relevante o antecedente sobre su caso?`;
+        const tieneDato = (valor) =>
+            typeof valor === 'string' && valor.trim() !== '';
 
+        let pregunta = '';
+
+        if (
+            !tieneDato(personal.nombres) &&
+            (!tieneDato(datosRespaldo.usuario_nombre) ||
+             datosRespaldo.usuario_nombre === 'Usuario CAJ')
+        ) {
+            pregunta = '¿Cuáles son sus nombres?';
+        } else if (!tieneDato(datosRespaldo.usuario_rut)) {
+            pregunta = '¿Cuál es su RUT?';
+        } else if (!tieneDato(datosRespaldo.domicilio)) {
+            pregunta = '¿Cuál es su domicilio?';
+        } else if (
+            !tieneDato(juridico.consulta_juridica) &&
+            !tieneDato(datosRespaldo.relato_hechos)
+        ) {
+            pregunta = '¿Cuál es el motivo de su consulta jurídica?';
+        } else {
+            pregunta = '¿Desea agregar algún otro antecedente relevante?';
+        }
+
+        const mensajeFallback =
+            'Bienvenido/a al canal de recepción jurídica. ' +
+            'Estoy reuniendo sus antecedentes para el asesor jurídico ' +
+            nombreAsesor + '.\n\n' + pregunta;
         return {
             datos_extraidos: datosRespaldo,
             respuesta_humana: aplicarPlantillaEncabezadoCAJ(mensajeFallback, nombreAsesor, nombreCentro)
