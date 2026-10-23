@@ -853,6 +853,36 @@ async function crearSesionBaileys(sessionId, generacion) {
 
             const senderJid = msg.key.remoteJid || '';
 
+            // CAJ_DIAGNOSTICO_LID_PN_V1
+            // Solo diagnóstico: no modifica la identidad ni el expediente.
+            if (senderJid.endsWith('@lid')) {
+                const candidatos = {
+                    remoteJidAlt: msg.key.remoteJidAlt,
+                    participantAlt: msg.key.participantAlt
+                };
+
+                const resultado = {};
+
+                for (const [campo, candidato] of Object.entries(candidatos)) {
+                    const valor = String(candidato || '');
+                    const coincide = valor.match(/^(\d+)@s\.whatsapp\.net$/);
+
+                    resultado[campo] = coincide
+                        ? 'PN disponible (termina en ' +
+                          coincide[1].slice(-4) + ')'
+                        : valor
+                            ? 'Identificador alternativo no telefonico'
+                            : 'No disponible';
+                }
+
+                console.log('[CAJ IDENTIDAD LID]', {
+                    sessionId,
+                    tipo: 'LID',
+                    fromMe: Boolean(msg.key.fromMe),
+                    ...resultado
+                });
+            }
+
             if (
                 !senderJid ||
                 senderJid === 'status@broadcast' ||
