@@ -600,6 +600,8 @@ body > header small {
             casos.forEach(caso => {
                 const item = document.createElement('div');
                 item.className = 'case-item ' + (caso.id === casoActivoId ? 'active' : '');
+                // CAJ_OCULTAR_ID_VISUAL_V1
+                item.dataset.caseId = caso.id;
                 
                 let badgeClass = 'badge-familia';
                 const mat = (caso.materia || '').toLowerCase();
@@ -621,7 +623,7 @@ body > header small {
                         </div>
                     </div>
                     <div class="case-meta" style="font-size: 0.82rem; color: #64748b; margin-top: 6px; line-height: 1.4;">
-                        <div><strong>ID:</strong> <code style="font-size: 0.75rem; background: #f1f5f9; padding: 1px 4px; border-radius: 4px;">${caso.id}</code> | <strong>RUT:</strong> ${rut}</div>
+                        <div><strong>RUT:</strong> ${rut}</div>
                         <div><strong>Contraparte:</strong> ${contraparte}</div>
                         <div><strong>Tribunal / Centro:</strong> ${tribunal} (${numDocs} adjuntos)</div>
                     </div>
@@ -774,7 +776,7 @@ body > header small {
         cargarFichasCAJ(caso);
 
         document.querySelectorAll('.case-item').forEach(el => {
-            el.classList.toggle('active', el.innerHTML.includes(caso.id));
+            el.classList.toggle('active', el.dataset.caseId === caso.id);
         });
 
         document.getElementById('panelExpediente').style.display = 'block';
@@ -790,7 +792,10 @@ body > header small {
         const tribunal = caso.tribunal || caso.datos_causa?.tribunal || '';
         const hechos = Array.isArray(caso.hechos) ? caso.hechos.join('\n') : (caso.hechos || caso.relato_hechos || '');
 
-        document.getElementById('expedienteId').textContent = caso.id;
+        document.getElementById('expedienteId').textContent =
+            nombre && nombre !== 'Usuario CAJ'
+                ? nombre
+                : 'Usuario sin identificar';
         document.getElementById('badgeMateria').textContent = materia;
         document.getElementById('editUsuario').value = nombre;
         if (document.getElementById('editRut')) document.getElementById('editRut').value = rut;
