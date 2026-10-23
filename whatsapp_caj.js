@@ -8,6 +8,11 @@ const {
     downloadMediaMessage
 } = require('@whiskeysockets/baileys');
 
+const {
+    registrarMapeoLidTelefonoCAJ
+} = require('./firebase_caj');
+
+// CAJ_GUARDAR_MAPEO_LID_V3
 const qrcode = require('qrcode');
 const pino = require('pino');
 const fs = require('fs');
@@ -853,40 +858,40 @@ async function crearSesionBaileys(sessionId, generacion) {
 
             const senderJid = msg.key.remoteJid || '';
 
-            // CAJ_CONSULTA_LID_PN_V2
-            // Consulta la correspondencia almacenada por Baileys.
-            // No modifica mensajes, expedientes ni credenciales.
+            // CAJ_GUARDAR_MAPEO_LID_V3
+            // No modifica el JID usado por las conversaciones.
             if (senderJid.endsWith('@lid')) {
-                try {
-                    const obtenerPN =
-                        sock.signalRepository?.lidMapping?.getPNForLID;
+                const alternativo = String(
+                    msg.key.remoteJidAlt || ''
+                );
 
-                    const pn = typeof obtenerPN === 'function'
-                        ? await obtenerPN.call(
-                            sock.signalRepository.lidMapping,
-                            senderJid
-                        )
-                        : null;
+                const coincidencia = alternativo.match(
+                    /^(\d{8,15})@s\.whatsapp\.net$/
+                );
 
-                    const coincidencia = String(pn || '')
-                        .match(/^(\d+)@s\.whatsapp\.net$/);
-
-                    console.log('[CAJ MAPEO LID-PN]', {
-                        sessionId,
-                        fromMe: Boolean(msg.key.fromMe),
-                        lidFinal: senderJid.split('@')[0].slice(-4),
-                        resultado: coincidencia
-                            ? 'Telefono asociado disponible'
-                            : 'Telefono no disponible en cache',
-                        telefonoFinal: coincidencia
-                            ? coincidencia[1].slice(-4)
-                            : null
-                    });
-                } catch (error) {
-                    console.warn(
-                        '[CAJ MAPEO LID-PN] Consulta no disponible:',
-                        error.message
-                    );
+                if (coincidencia) {
+                    // CAJ_MAPEO_NO_BLOQUEANTE_V5
+                    // Firebase no detiene la recepcion de WhatsApp.
+                    Promise.resolve()
+                        .then(() => registrarMapeoLidTelefonoCAJ(
+                            sessionId,
+                            senderJid,
+                            coincidencia[1]
+                        ))
+                        .then(() => {
+                            console.log('[CAJ TELEFONO VERIFICADO]', {
+                                sessionId,
+                                resultado: 'Asociacion almacenada',
+                                lidFinal: senderJid.split('@')[0].slice(-4),
+                                telefonoFinal: coincidencia[1].slice(-4)
+                            });
+                        })
+                        .catch(error => {
+                            console.error(
+                                '[CAJ TELEFONO VERIFICADO]',
+                                error.message
+                            );
+                        });
                 }
             }
 

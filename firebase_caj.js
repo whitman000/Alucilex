@@ -774,6 +774,38 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 if (data.expedienteId) {
                     mem.expedienteId = data.expedienteId;
                 }
+
+                // CAJ_RECUPERAR_TELEFONO_LID_V4
+                // Recuperar la identidad telefónica verificada del LID.
+                const telefonoVerificado = String(
+                    data.telefono_verificado || ''
+                );
+
+                if (
+                    String(jid).endsWith('@lid') &&
+                    /^\d{8,15}$/.test(telefonoVerificado)
+                ) {
+                    const telefonoActual = String(
+                        mem.ficha.telefono || ''
+                    );
+
+                    const telefonoLid = String(jid).split('@')[0];
+
+                    if (
+                        !telefonoActual ||
+                        telefonoActual === telefonoLid ||
+                        telefonoActual === telefonoVerificado
+                    ) {
+                        mem.telefono = telefonoVerificado;
+                        mem.ficha.telefono = telefonoVerificado;
+                        mem.ficha.telefono_verificado =
+                            telefonoVerificado;
+                    } else {
+                        console.warn(
+                            '[CAJ IDENTIDAD] Telefono diferente en ficha; requiere verificacion'
+                        );
+                    }
+                }
             }
         } catch (err) {
             console.warn(`⚠️ Advertencia leyendo conversación ${jid}:`, err.message);
@@ -1207,6 +1239,54 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
 }
 
 
+// CAJ_GUARDAR_MAPEO_LID_V3
+// Conserva únicamente asociaciones telefónicas explícitas de WhatsApp.
+// No busca ni modifica expedientes jurídicos.
+async function registrarMapeoLidTelefonoCAJ(sessionId, jid, telefono) {
+    if (!coleccionConversaciones) {
+        throw new Error('Firestore no disponible');
+    }
+
+    if (
+        !/^[a-zA-Z0-9_-]+$/.test(String(sessionId)) ||
+        !/^\d+@lid$/.test(String(jid)) ||
+        !/^\d{8,15}$/.test(String(telefono))
+    ) {
+        throw new Error('Identificadores de WhatsApp invalidos');
+    }
+
+    const ref = coleccionConversaciones.doc(`${sessionId}_${jid}`);
+
+    await db.runTransaction(async tx => {
+        const snap = await tx.get(ref);
+        const anterior = snap.exists ? snap.data() : {};
+
+        if (
+            anterior.sessionId &&
+            anterior.sessionId !== sessionId
+        ) {
+            throw new Error('Sesion de conversacion no coincide');
+        }
+
+        const conocido = anterior.telefono_verificado || '';
+
+        if (conocido && conocido !== telefono) {
+            throw new Error(
+                'Conflicto LID-telefono: asociacion diferente'
+            );
+        }
+
+        tx.set(ref, {
+            jid,
+            sessionId,
+            telefono_verificado: telefono,
+            fuente_telefono: 'remoteJidAlt',
+            telefono_verificado_en: new Date()
+        }, { merge: true });
+    });
+
+    return true;
+}
 module.exports = {
     db,
     storageBucket,
@@ -1223,5 +1303,6 @@ module.exports = {
     buscarPostulantePorTelefono,
     obtenerAsesorActivoCAJ,
     validarAccesoPostulante,
+    registrarMapeoLidTelefonoCAJ,
     crearRepositorioWhatsAppFirebase
 };
