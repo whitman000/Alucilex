@@ -373,10 +373,17 @@ function crearControlConversaciones({
                     return { silencioso: true };
                 }
 
-                const respuesta =
+                // CAJ_RESPUESTA_CIERRE_CONTROLADA_V1
+                // El cierre confirmado tiene prioridad sobre otra pregunta.
+                const respuestaGenerada =
                     typeof resultado.respuesta_humana === 'string'
                         ? resultado.respuesta_humana.trim()
                         : '';
+
+                const respuesta =
+                    actual.entrevista?.finalizada === true
+                        ? 'Gracias por proporcionar sus antecedentes. Su entrevista ha finalizado y la información quedó registrada para revisión del asesor jurídico. Si necesita agregar algo más, puede escribir nuevamente.'
+                        : respuestaGenerada;
 
                 if (!respuesta) {
                     return { silencioso: true };

@@ -1044,6 +1044,48 @@ body > header small {
     let casoActivoData = null;
     let listaCasosGlobal = [];
 
+    // CAJ_ESTADO_ENTREVISTA_VISUAL_V1
+    // Muestra estado de atencion, no presencia en tiempo real.
+    function obtenerEstadoEntrevistaCAJ(caso) {
+        const estado = String(caso?.estado_atencion || '');
+
+        if (estado === 'relevo_asesor_humano') {
+            return {
+                texto: 'Atencion por asesor',
+                color: '#b45309'
+            };
+        }
+
+        if (estado === 'entrevista_finalizada') {
+            return {
+                texto: 'Entrevista finalizada',
+                color: '#047857'
+            };
+        }
+
+        if (estado === 'ficha_completa_ia') {
+            return {
+                texto: 'Ficha completada por IA',
+                color: '#047857'
+            };
+        }
+
+        if (estado === 'en_indagacion_ia') {
+            return {
+                texto: caso.ia_activa === false
+                    ? 'IA pausada'
+                    : 'Entrevista IA en curso',
+                color: caso.ia_activa === false
+                    ? '#b45309'
+                    : '#047857'
+            };
+        }
+
+        return {
+            texto: 'Estado por confirmar',
+            color: '#64748b'
+        };
+    }
     // CARGAR Y ACTUALIZAR LISTA DE CAUSAS
     async function cargarCasos() {
         const btnActualizar = document.querySelector('button[onclick="cargarCasos()"]');
@@ -1098,6 +1140,16 @@ body > header small {
                         <div><strong>Tribunal / Centro:</strong> ${tribunal} (${numDocs} adjuntos)</div>
                     </div>
                 `;
+                // CAJ_ESTADO_ENTREVISTA_VISUAL_V1
+                const estadoVisual = obtenerEstadoEntrevistaCAJ(caso);
+                const indicador = document.createElement('div');
+                indicador.textContent = estadoVisual.texto;
+                indicador.style.color = estadoVisual.color;
+                indicador.style.fontWeight = '600';
+                indicador.style.fontSize = '12px';
+                indicador.style.marginTop = '6px';
+                item.appendChild(indicador);
+
                 item.onclick = () => seleccionarCaso(caso);
                 contenedor.appendChild(item);
             });
@@ -1371,6 +1423,25 @@ body > header small {
         const materia = caso.materia || caso.datos_causa?.materia || 'Otra';
         const tribunal = caso.tribunal || caso.datos_causa?.tribunal || '';
         const hechos = Array.isArray(caso.hechos) ? caso.hechos.join('\n') : (caso.hechos || caso.relato_hechos || '');
+
+        // CAJ_ESTADO_ENTREVISTA_VISUAL_V1
+        const estadoFicha = obtenerEstadoEntrevistaCAJ(caso);
+        let indicadorFicha = document.getElementById(
+            'estadoEntrevistaCAJ'
+        );
+
+        if (!indicadorFicha) {
+            indicadorFicha = document.createElement('span');
+            indicadorFicha.id = 'estadoEntrevistaCAJ';
+            indicadorFicha.style.marginLeft = '12px';
+            indicadorFicha.style.fontSize = '12px';
+            indicadorFicha.style.fontWeight = '600';
+            document.getElementById('expedienteId')
+                .insertAdjacentElement('afterend', indicadorFicha);
+        }
+
+        indicadorFicha.textContent = estadoFicha.texto;
+        indicadorFicha.style.color = estadoFicha.color;
 
         document.getElementById('expedienteId').textContent =
             nombre && nombre !== 'Usuario CAJ'

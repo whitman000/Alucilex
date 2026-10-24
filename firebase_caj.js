@@ -733,7 +733,13 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
                 salidasPropias: new Set(),
                 historial: [],
                 ficha: {},
-                expedienteId: null
+                expedienteId: null,
+                // CAJ_ESTADO_ENTREVISTA_PERSISTENTE_V1
+                entrevista: {
+                    fase: 'en_curso',
+                    cierre_preguntado: false,
+                    finalizada: false
+                }
             });
         }
         return memoriaLocal.get(jid);
@@ -748,6 +754,21 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
             if (docSnap.exists) {
                 const data = docSnap.data() || {};
                 if (typeof data.pausado === 'boolean') mem.pausado = data.pausado;
+
+                // CAJ_ESTADO_ENTREVISTA_PERSISTENTE_V1
+                if (data.entrevista && typeof data.entrevista === 'object') {
+                    const guardada = data.entrevista;
+                    mem.entrevista = {
+                        // CAJ_RECUPERAR_FASE_ENTREVISTA_V2
+                        fase: guardada.finalizada === true
+                            ? 'finalizada'
+                            : guardada.cierre_preguntado === true
+                                ? 'esperando_confirmacion'
+                                : 'en_curso',
+                        cierre_preguntado: guardada.cierre_preguntado === true,
+                        finalizada: guardada.finalizada === true
+                    };
+                }
                 if (Array.isArray(data.historial) && data.historial.length > mem.historial.length) {
                     mem.historial = data.historial;
                     for (const m of data.historial) {
@@ -827,6 +848,8 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 sessionId,
                 pausado: mem.pausado,
                 expedienteId: mem.expedienteId || null,
+                // CAJ_ESTADO_ENTREVISTA_PERSISTENTE_V1
+                entrevista: mem.entrevista,
                 ficha: mem.ficha || {},
                 historial: mem.historial.slice(-60),
                 salidasPropias: Array.from(mem.salidasPropias).slice(-100),
@@ -840,7 +863,17 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
     return {
         async estado(jid) {
             const mem = await cargarDesdeFirestore(jid);
-            return { pausado: mem.pausado };
+            // CAJ_RESPUESTA_CIERRE_CONTROLADA_V1
+            return {
+                pausado: mem.pausado,
+                entrevista: {
+                    fase: mem.entrevista?.fase || 'en_curso',
+                    cierre_preguntado:
+                        mem.entrevista?.cierre_preguntado === true,
+                    finalizada:
+                        mem.entrevista?.finalizada === true
+                }
+            };
         },
 
         async pausar(jid, valor) {
@@ -995,6 +1028,76 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 mem.ficha.telefono = telefonoEntrante;
             }
 
+            // CAJ_CONFIRMACION_CIERRE_V1
+            // Solo interpretar el cierre tras una pregunta efectivamente enviada.
+            // CAJ_CIERRE_SEGURO_V2
+            const normalizarRespuestaCierre = valor =>
+                String(valor || '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9\s]/g, '')
+                    .trim()
+                    .replace(/\s+/g, ' ');
+
+            const entrevista = mem.entrevista || {
+                fase: 'en_curso',
+                cierre_preguntado: false,
+                finalizada: false
+            };
+
+            const historial = mem.historial || [];
+            const anterior = historial[historial.length - 2];
+
+            const preguntaAnterior =
+                anterior?.autor === 'ia_caj' &&
+                normalizarRespuestaCierre(anterior.texto)
+                    .includes(
+                        'tiene algun antecedente adicional que desee agregar a su consulta'
+                    );
+
+            const respuestaCliente = normalizarRespuestaCierre(
+                mensaje.texto
+            );
+
+            const confirmaTermino = new Set([
+                'no',
+                'no gracias',
+                'no tengo nada mas',
+                'nada mas',
+                'eso es todo',
+                'no tengo mas antecedentes',
+                'no hay nada mas que agregar'
+            ]).has(respuestaCliente);
+
+            if (!delAsesor && respuestaCliente) {
+                if (
+                    entrevista.cierre_preguntado === true &&
+                    preguntaAnterior &&
+                    confirmaTermino
+                ) {
+                    entrevista.fase = 'finalizada';
+                    entrevista.finalizada = true;
+                    entrevista.cierre_preguntado = false;
+                } else if (
+                    entrevista.finalizada === true ||
+                    (
+                        entrevista.cierre_preguntado === true &&
+                        (
+                            !preguntaAnterior ||
+                            !['no se', 'no estoy seguro']
+                                .includes(respuestaCliente)
+                        )
+                    )
+                ) {
+                    entrevista.fase = 'en_curso';
+                    entrevista.finalizada = false;
+                    entrevista.cierre_preguntado = false;
+                }
+            }
+
+            mem.entrevista = entrevista;
+
             const extraidos = resultado.datos_extraidos || {};
             const asesor = await obtenerAsesor();
             const perfilSesion = await obtenerPerfilSesionCAJ(sessionId);
@@ -1092,7 +1195,13 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 postulante_id: perfilSesion.postulante_id || mem.ficha.postulante_id,
                 canal: 'whatsapp',
                 ia_activa: !mem.pausado && !delAsesor,
-                estado_atencion: (mem.pausado || delAsesor) ? 'relevo_asesor_humano' : (extraidos.ficha_completa ? 'ficha_completa_ia' : 'en_indagacion_ia'),
+                estado_atencion: mem.entrevista?.finalizada
+                    ? 'entrevista_finalizada'
+                    : (mem.pausado || delAsesor)
+                        ? 'relevo_asesor_humano'
+                        : (extraidos.ficha_completa
+                            ? 'ficha_completa_ia'
+                            : 'en_indagacion_ia'),
                 historial_whatsapp: mem.historial
             });
 
@@ -1231,6 +1340,24 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                     fecha: new Date().toISOString()
                 };
                 mem.historial.push(msgIA);
+
+                // CAJ_CONFIRMACION_CIERRE_V1
+                const textoNormalizado = String(textoRespuesta)
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase();
+
+                if (
+                    textoNormalizado.includes(
+                        'tiene algun antecedente adicional que desee agregar a su consulta'
+                    )
+                ) {
+                    mem.entrevista = {
+                        fase: 'esperando_confirmacion',
+                        cierre_preguntado: true,
+                        finalizada: false
+                    };
+                }
                 if (mem.expedienteId && coleccionCasos) {
                     const perfilSesion = await obtenerPerfilSesionCAJ(sessionId);
                     await guardarCaso({
