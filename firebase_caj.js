@@ -386,6 +386,7 @@ async function guardarCaso(datos) {
             'fecha_audiencia',
             'estado_procesal',
             'consulta_juridica',
+            'objetivo_consulta',
             'observaciones_entrevista'
         ];
 
@@ -519,7 +520,7 @@ async function actualizarCaso(id, datos) {
                 'numero_causa', 'ruc', 'caratula',
                 'calidad_procesal', 'fecha_audiencia',
                 'estado_procesal', 'consulta_juridica',
-                'observaciones_entrevista'
+                'objetivo_consulta', 'observaciones_entrevista'
             ]
         };
 
@@ -738,7 +739,12 @@ function crearRepositorioWhatsAppFirebase({ sessionId = 'coordinador_carlos', ob
                 entrevista: {
                     fase: 'en_curso',
                     cierre_preguntado: false,
-                    finalizada: false
+                    finalizada: false,
+                    camposResueltos: [],
+                    campoActual: null,
+                    // CAJ_ESTADO_JURIDICO_V1
+                    existeCausaJudicial: null,
+                    requiereRuc: null
                 }
             });
         }
@@ -766,7 +772,23 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                                 ? 'esperando_confirmacion'
                                 : 'en_curso',
                         cierre_preguntado: guardada.cierre_preguntado === true,
-                        finalizada: guardada.finalizada === true
+                        finalizada: guardada.finalizada === true,
+                        camposResueltos: Array.isArray(guardada.camposResueltos)
+                            ? [...new Set(guardada.camposResueltos.filter(
+                                campo => typeof campo === 'string'
+                            ))]
+                            : [],
+                        campoActual: typeof guardada.campoActual === 'string'
+                            ? guardada.campoActual
+                            : null,
+                        existeCausaJudicial:
+                            typeof guardada.existeCausaJudicial === 'boolean'
+                                ? guardada.existeCausaJudicial
+                                : null,
+                        requiereRuc:
+                            typeof guardada.requiereRuc === 'boolean'
+                                ? guardada.requiereRuc
+                                : null
                     };
                 }
                 if (Array.isArray(data.historial) && data.historial.length > mem.historial.length) {
@@ -866,12 +888,27 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
             // CAJ_RESPUESTA_CIERRE_CONTROLADA_V1
             return {
                 pausado: mem.pausado,
+                fichaActual: {
+                    ...mem.ficha,
+                    ficha_personal: { ...(mem.ficha.ficha_personal || {}) },
+                    antecedentes_juridicos: { ...(mem.ficha.antecedentes_juridicos || {}) }
+                },
                 entrevista: {
                     fase: mem.entrevista?.fase || 'en_curso',
                     cierre_preguntado:
                         mem.entrevista?.cierre_preguntado === true,
                     finalizada:
-                        mem.entrevista?.finalizada === true
+                        mem.entrevista?.finalizada === true,
+                    camposResueltos: [...(mem.entrevista?.camposResueltos || [])],
+                    campoActual: mem.entrevista?.campoActual || null,
+                    existeCausaJudicial:
+                        typeof mem.entrevista?.existeCausaJudicial === 'boolean'
+                            ? mem.entrevista.existeCausaJudicial
+                            : null,
+                    requiereRuc:
+                        typeof mem.entrevista?.requiereRuc === 'boolean'
+                            ? mem.entrevista.requiereRuc
+                            : null
                 }
             };
         },
@@ -1060,6 +1097,39 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 mensaje.texto
             );
 
+            // CAJ_RESPUESTA_CAUSA_JUDICIAL_V1
+            // Solo interpreta la respuesta a la pregunta
+            // jurídica efectivamente enviada.
+            if (
+                !delAsesor &&
+                entrevista.campoActual === 'existeCausaJudicial' &&
+                entrevista.cierre_preguntado !== true
+            ) {
+                const {
+                    interpretarExistenciaCausa
+                } = require('./entrevista_caj');
+
+                const preguntaJudicial =
+                    '¿Actualmente existe una causa judicial iniciada sobre este asunto?';
+
+                const preguntaCoincide =
+                    anterior?.autor === 'ia_caj' &&
+                    normalizarRespuestaCierre(anterior.texto)
+                        .includes(
+                            normalizarRespuestaCierre(preguntaJudicial)
+                        );
+
+                if (preguntaCoincide) {
+                    const interpretacion =
+                        interpretarExistenciaCausa(mensaje.texto);
+
+                    if (typeof interpretacion === 'boolean') {
+                        entrevista.existeCausaJudicial = interpretacion;
+                        entrevista.campoActual = null;
+                    }
+                }
+            }
+
             const confirmaTermino = new Set([
                 'no',
                 'no gracias',
@@ -1069,6 +1139,81 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 'no tengo mas antecedentes',
                 'no hay nada mas que agregar'
             ]).has(respuestaCliente);
+
+            // CAJ_RESPUESTA_NO_APLICABLE_V1
+            // Solo resolver el campo que fue efectivamente preguntado.
+            if (
+                !delAsesor &&
+                entrevista.cierre_preguntado !== true &&
+                typeof entrevista.campoActual === 'string'
+            ) {
+                const {
+                    PREGUNTAS_PERSONALES,
+                    estaRespondidoSinDato
+                } = require('./entrevista_caj');
+
+                // CAJ_NO_APLICABLE_JURIDICO_V1
+                const { siguientePreguntaJuridica } =
+                    require('./entrevista_caj');
+
+                let preguntaRegistrada = PREGUNTAS_PERSONALES.find(
+                    item => item[0] === entrevista.campoActual
+                );
+
+                if (!preguntaRegistrada) {
+                    const juridica = siguientePreguntaJuridica(
+                        mem.ficha,
+                        entrevista
+                    );
+
+                    if (
+                        juridica &&
+                        juridica.campo === entrevista.campoActual
+                    ) {
+                        preguntaRegistrada = [
+                            juridica.campo,
+                            juridica.pregunta
+                        ];
+                    }
+                }
+
+                const preguntaCoincide =
+                    preguntaRegistrada &&
+                    anterior?.autor === 'ia_caj' &&
+                    normalizarRespuestaCierre(anterior.texto)
+                        .includes(
+                            normalizarRespuestaCierre(preguntaRegistrada[1])
+                        );
+
+                if (
+                    preguntaCoincide &&
+                    (
+                        estaRespondidoSinDato(mensaje.texto) ||
+                        (
+                            ['no', 'no se'].includes(
+                                normalizarRespuestaCierre(mensaje.texto)
+                            ) &&
+                            [
+                                'telefono_fijo',
+                                'telefono_recado',
+                                'numero_causa',
+                                'ruc',
+                                'tribunal',
+                                'fecha_audiencia'
+                            ].includes(entrevista.campoActual)
+                        )
+                    )
+                ) {
+                    entrevista.camposResueltos = [
+                        ...new Set([
+                            ...(entrevista.camposResueltos || []),
+                            entrevista.campoActual
+                        ])
+                    ];
+
+                    entrevista.campoActual = null;
+                }
+            }
 
             if (!delAsesor && respuestaCliente) {
                 if (
@@ -1199,9 +1344,7 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                     ? 'entrevista_finalizada'
                     : (mem.pausado || delAsesor)
                         ? 'relevo_asesor_humano'
-                        : (extraidos.ficha_completa
-                            ? 'ficha_completa_ia'
-                            : 'en_indagacion_ia'),
+                        : 'en_indagacion_ia',
                 historial_whatsapp: mem.historial
             });
 
@@ -1321,6 +1464,42 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
 
 
 
+        // CAJ_REGISTRO_CAMPO_PREGUNTADO_V1
+        async registrarCampoPreguntado(jid, campo) {
+            const { PREGUNTAS_PERSONALES } = require('./entrevista_caj');
+
+            const permitido =
+                PREGUNTAS_PERSONALES.some(
+                    item => item[0] === campo
+                ) ||
+                [
+                    'existeCausaJudicial',
+                    'consulta_juridica',
+                    'relato_hechos',
+                    'contraparte_nombre',
+                    'objetivo_consulta',
+                    'numero_causa',
+                    'tribunal',
+                    'calidad_procesal',
+                    'estado_procesal',
+                    'fecha_audiencia',
+                    'ruc'
+                ].includes(campo);
+
+            if (!permitido) {
+                throw new Error('Campo de entrevista no reconocido');
+            }
+
+            const mem = await cargarDesdeFirestore(jid);
+
+            mem.entrevista = {
+                ...mem.entrevista,
+                campoActual: campo
+            };
+
+            await persistirEnFirestore(jid);
+        },
+
         async reservarSalida(jid, idSalida) {
             const mem = asegurarEstadoMemoria(jid);
             mem.salidasPropias.add(String(idSalida));
@@ -1353,9 +1532,11 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                     )
                 ) {
                     mem.entrevista = {
+                        ...mem.entrevista,
                         fase: 'esperando_confirmacion',
                         cierre_preguntado: true,
-                        finalizada: false
+                        finalizada: false,
+                        campoActual: null
                     };
                 }
                 if (mem.expedienteId && coleccionCasos) {
@@ -1365,8 +1546,18 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                         propietario_uid: perfilSesion.uid,
                         id_expediente_forzado: mem.expedienteId,
                         canal: 'whatsapp',
+                        estado_atencion: mem.entrevista?.finalizada === true
+                            ? 'entrevista_finalizada'
+                            : mem.pausado
+                                ? 'relevo_asesor_humano'
+                                : 'en_indagacion_ia',
                         historial_whatsapp: mem.historial
-                    }).catch(() => {});
+                    }).catch(error => {
+                        console.error(
+                            '[CAJ] Error al guardar salida en expediente:',
+                            error
+                        );
+                    });
                 }
             }
             await persistirEnFirestore(jid);

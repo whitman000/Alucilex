@@ -4,6 +4,10 @@
 // Motor de control independiente de WhatsApp y Firebase, para gestionar etiquetas CAJ,
 // el relevo humano automático (delAsesor) y la extracción silenciosa de datos.
 const crypto = require('crypto');
+const {
+    siguientePreguntaPersonal,
+    siguientePreguntaJuridica
+} = require('./entrevista_caj');
 
 const ETIQUETAS_CAJ = Object.freeze({
     RECEPCION_IA: 'CAJ - Recepción IA',
@@ -363,6 +367,29 @@ function crearControlConversaciones({
 
                 const actual = await repo.estado(jid);
 
+                // CAJ_CONTROL_PREGUNTAS_V1
+                // Consulta el siguiente campo sin alterar todavía
+                // la respuesta generada por OpenRouter.
+                const siguienteCampoCAJ = siguientePreguntaPersonal(
+                    actual.fichaActual || {},
+                    {
+                        camposResueltos:
+                            actual.entrevista?.camposResueltos || []
+                    }
+                );
+
+                // CAJ_PREGUNTA_JURIDICA_DETERMINISTA_V1
+                const siguienteCampoJuridicoCAJ =
+                    siguienteCampoCAJ
+                        ? null
+                        : siguientePreguntaJuridica(
+                            actual.fichaActual || {},
+                            actual.entrevista || {}
+                        );
+
+                const campoElegidoCAJ =
+                    siguienteCampoCAJ || siguienteCampoJuridicoCAJ;
+
                 if (
                     delAsesor ||
                     c.pausado ||
@@ -380,10 +407,48 @@ function crearControlConversaciones({
                         ? resultado.respuesta_humana.trim()
                         : '';
 
-                const respuesta =
+                // CAJ_ACTIVAR_PREGUNTAS_DETERMINISTAS_V1
+                // Se conserva la respuesta original para cuando no
+                // existan preguntas personales pendientes.
+                const respuestaOriginal =
                     actual.entrevista?.finalizada === true
                         ? 'Gracias por proporcionar sus antecedentes. Su entrevista ha finalizado y la información quedó registrada para revisión del asesor jurídico. Si necesita agregar algo más, puede escribir nuevamente.'
                         : respuestaGenerada;
+
+                // Conservar el encabezado institucional existente.
+                const coincidenciaEncabezado = respuestaGenerada.match(
+                    /^[\s\S]*?━━━━━━━━━━━━━━━━━━━━━━\s*/
+                );
+
+                const encabezadoCAJ = coincidenciaEncabezado
+                    ? coincidenciaEncabezado[0]
+                    : [
+                        `🏛️ *${contexto.centroNombre || 'CAJ'}*`,
+                        `⚖️ *Asesor Jurídico a cargo:* ${contexto.asesorNombre || 'Asesor jurídico'}`,
+                        '━━━━━━━━━━━━━━━━━━━━━━',
+                        ''
+                    ].join('\n') + '\n';
+
+                // La pregunta pendiente tiene prioridad sobre
+                // cualquier cierre anticipado generado por la IA.
+                // CAJ_CIERRE_DETERMINISTA_V1
+                // JavaScript decide cuándo preguntar y cuándo cerrar.
+                const preguntaCierreCAJ =
+                    '¿Tiene algún antecedente adicional que desee agregar a su consulta?';
+
+                let respuesta;
+
+                if (campoElegidoCAJ) {
+                    // Nunca cerrar si existen datos pendientes.
+                    respuesta = encabezadoCAJ + campoElegidoCAJ.pregunta;
+                } else if (actual.entrevista?.finalizada === true) {
+                    // El cliente confirmó expresamente el término.
+                    respuesta = respuestaOriginal;
+                } else {
+                    // Todos los campos aplicables están resueltos.
+                    // Solicitar confirmación expresa.
+                    respuesta = encabezadoCAJ + preguntaCierreCAJ;
+                }
 
                 if (!respuesta) {
                     return { silencioso: true };
@@ -425,6 +490,20 @@ function crearControlConversaciones({
                     idSalida,
                     respuesta
                 );
+
+                // CAJ_CAMPO_ENVIADO_V1
+                // Registrar únicamente preguntas que coincidan
+                // con el campo determinado por el controlador.
+                if (
+                    campoElegidoCAJ &&
+                    respuesta.includes(campoElegidoCAJ.pregunta) &&
+                    typeof repo.registrarCampoPreguntado === 'function'
+                ) {
+                    await repo.registrarCampoPreguntado(
+                        jid,
+                        campoElegidoCAJ.campo
+                    );
+                }
 
                 return { respondido: true };
             } catch (e) {
