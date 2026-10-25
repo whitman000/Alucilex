@@ -35,7 +35,8 @@ const {
     obtenerEstadoSesion,
     desconectarSesion,
     enviarMensaje,
-    activarIAEnChat
+    activarIAEnChat,
+    obtenerOCrearControl
 } = require('./whatsapp_caj');
 
 // Importar los bancos estáticos de Alucilex
@@ -398,7 +399,7 @@ app.use('/api/caj', verificarIdentidadFirebase, async (req, res, next) => {
               (req.method === 'GET' && /^\/whatsapp\/qr\/estado\/[^/]+$/.test(req.path)) ||
               // CAJ_QR_ASESORES_73
               (req.method === 'POST' &&
-               ['/whatsapp/qr/iniciar', '/whatsapp/qr/desconectar', '/whatsapp/enviar', '/whatsapp/ia/activar'].includes(req.path)) ||
+               ['/whatsapp/qr/iniciar', '/whatsapp/qr/desconectar', '/whatsapp/enviar', '/whatsapp/ia/activar', '/whatsapp/ia/control'].includes(req.path)) ||
               (req.method === 'POST' && ['/nuevo', '/caso'].includes(req.path)) ||
               (['PUT', 'DELETE'].includes(req.method) && /^\/casos\/[^/]+(?:\/adjuntos\/[^/]+)?$/.test(req.path)) ||
               (req.method === 'POST' && /^\/(procesar|adjuntos)\/[^/]+$/.test(req.path)))) {
@@ -1139,6 +1140,106 @@ app.post('/api/caj/whatsapp/ia/activar', async (req, res) => {
     }
 });
 
+// CAJ_CONTROL_MANUAL_IA_V1
+// Control interno por expediente. Nunca envia comandos al cliente.
+app.post('/api/caj/whatsapp/ia/control', async (req, res) => {
+    try {
+        const { casoId, accion } = req.body || {};
+
+        if (
+            typeof casoId !== 'string' ||
+            !/^[a-zA-Z0-9_-]{1,200}$/.test(casoId) ||
+            !['pausar', 'continuar'].includes(accion)
+        ) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Expediente u orden invalida'
+            });
+        }
+
+        const expediente = await dbFirestore
+            .collection('casos_caj')
+            .doc(casoId)
+            .get();
+
+        if (
+            !expediente.exists ||
+            expediente.data().propietario_uid !== req.usuarioFirebase.uid
+        ) {
+            return res.status(404).json({
+                ok: false,
+                error: 'Expediente no autorizado'
+            });
+        }
+
+        const sessionId = req.perfilCAJ.sessionIdWhatsApp;
+
+        if (
+            typeof sessionId !== 'string' ||
+            !/^[a-zA-Z0-9_-]+$/.test(sessionId)
+        ) {
+            return res.status(403).json({
+                ok: false,
+                error: 'Sesion WhatsApp no autorizada'
+            });
+        }
+
+        const conversaciones = await dbFirestore
+            .collection('conversaciones_whatsapp_caj')
+            .where('expedienteId', '==', casoId)
+            .get();
+
+        const vinculadas = conversaciones.docs.filter(doc => {
+            const data = doc.data();
+
+            return (
+                data.sessionId === sessionId &&
+                typeof data.jid === 'string' &&
+                /^\d+@(lid|s\.whatsapp\.net)$/.test(data.jid) &&
+                doc.id === sessionId + '_' + data.jid
+            );
+        });
+
+        if (vinculadas.length !== 1) {
+            return res.status(409).json({
+                ok: false,
+                error: 'No existe una unica conversacion vinculada al expediente'
+            });
+        }
+
+        const jid = vinculadas[0].data().jid;
+        const control = obtenerOCrearControl(sessionId);
+
+        if (!control.permitido(jid)) {
+            return res.status(409).json({
+                ok: false,
+                error: 'La conversacion no esta habilitada en esta sesion'
+            });
+        }
+
+        if (accion === 'pausar') {
+            await control.pausarManual(jid);
+        } else {
+            await control.reactivar(jid);
+        }
+
+        return res.json({
+            ok: true,
+            accion,
+            pausado: accion === 'pausar',
+            mensaje: accion === 'pausar'
+                ? 'IA pausada por el asesor'
+                : 'IA autorizada para continuar al recibir un mensaje del cliente'
+        });
+
+    } catch (error) {
+        console.error('[CAJ CONTROL IA]', error.message);
+        return res.status(500).json({
+            ok: false,
+            error: 'No fue posible ejecutar la orden de IA'
+        });
+    }
+});
 // Enlace directo de conveniencia a la interfaz
 app.get('/caj', (req, res) => {
     res.sendFile(path.join(__dirname, 'caj_dashboard.html'));

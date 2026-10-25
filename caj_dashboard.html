@@ -987,8 +987,22 @@ body > header small {
             <textarea id="editHechos" style="min-height: 80px;"></textarea>
             <label>Resumen de la atención por WhatsApp (IA, pendiente de revisión):</label>
             <div id="resumenAtencionIA" style="white-space:pre-wrap; padding:12px; background:#f1f5f9; border-radius:8px; font-size:13px;">Sin resumen.</div>
-            <button type="button" class="btn btn-outline" style="margin-top:8px;" onclick="reactivarRecepcionIA()">Reactivar recepción IA de esta conversación</button>
-            <p style="font-size:12px;color:#64748b;margin-top:6px;">Cuando escribe el asesor, la IA deja de responder y sigue registrando antecedentes. Este botón autoriza que vuelva a responder.</p>
+            <!-- CAJ_BOTONES_CONTROL_IA_V1 -->
+<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+    <button type="button" class="btn btn-outline"
+        onclick="controlarEntrevistaIA('pausar')">
+        PAUSAR IA
+    </button>
+    <button type="button" class="btn btn-primary"
+        onclick="controlarEntrevistaIA('continuar')">
+        CONTINUAR IA
+    </button>
+</div>
+<p style="font-size:12px;color:#64748b;margin-top:6px;">
+    Ordenes internas del asesor. No se envian al cliente.
+    Continuar IA permite retomar la entrevista al recibir
+    el siguiente mensaje del usuario.
+</p>
 
             <button class="btn btn-outline" style="margin-top: 8px; width: 100%; border-color: var(--primary-light); color: var(--primary);" onclick="guardarCambiosCausa()">💾 Guardar Correcciones de la Causa en BD</button>
         </div>
@@ -1666,18 +1680,53 @@ body > header small {
         }
     }
 
-    async function reactivarRecepcionIA() {
-        if (!casoActivoId || !confirm('¿Autorizar a la IA a responder al próximo mensaje de este usuario?')) return;
-        try {
-            const res = await fetch(`${API_BASE}/whatsapp/qr/reactivar`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ casoId: casoActivoId })
-            });
-            const data = await res.json();
-            alert(data.ok ? data.mensaje : data.error);
-        } catch (e) { alert('No se pudo reactivar la recepción.'); }
-    }
+    // CAJ_CONTROL_INTERNO_IA_V1
+    async function controlarEntrevistaIA(accion) {
+        if (!casoActivoId ||
+            !['pausar', 'continuar'].includes(accion)) {
+            alert('Seleccione un expediente válido.');
+            return;
+        }
 
+        const descripcion = accion === 'pausar'
+            ? '¿Pausar la IA en este expediente?'
+            : '¿Autorizar que la IA continúe la entrevista?';
+
+        if (!confirm(descripcion)) return;
+
+        try {
+            const res = await fetch(
+                `${API_BASE}/whatsapp/ia/control`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        casoId: casoActivoId,
+                        accion
+                    })
+                }
+            );
+
+            const data = await res.json();
+
+            if (!res.ok || !data.ok) {
+                throw new Error(
+                    data.error || 'Orden rechazada'
+                );
+            }
+
+            alert(data.mensaje);
+
+            if (typeof cargarCasos === 'function') {
+                await cargarCasos();
+            }
+
+        } catch (error) {
+            alert('Control IA: ' + error.message);
+        }
+    }
     // CAJ_FORMULARIO_LIMPIO_V1
     document.addEventListener('DOMContentLoaded', () => {
         const formulario = document.getElementById('formNuevaCausa');

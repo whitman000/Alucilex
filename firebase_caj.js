@@ -860,9 +860,14 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
         return mem;
     }
 
-    async function persistirEnFirestore(jid) {
+    async function persistirEnFirestore(jid, exigirConfirmacion = false) {
         const mem = asegurarEstadoMemoria(jid);
-        if (!coleccionConversaciones) return;
+        if (!coleccionConversaciones) {
+            if (exigirConfirmacion) {
+                throw new Error('Firestore no disponible para guardar el control IA');
+            }
+            return;
+        }
         try {
             await coleccionConversaciones.doc(`${sessionId}_${jid}`).set({
                 jid,
@@ -879,6 +884,7 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
             }, { merge: true });
         } catch (err) {
             console.warn(`⚠️ Advertencia guardando conversación ${jid}:`, err.message);
+            if (exigirConfirmacion) throw err;
         }
     }
 
@@ -888,6 +894,11 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
             // CAJ_RESPUESTA_CIERRE_CONTROLADA_V1
             return {
                 pausado: mem.pausado,
+                // CAJ_ULTIMA_INTERVENCION_ASESOR_V1
+                ultimaIntervencionAsesor: [...(mem.historial || [])]
+                    .reverse()
+                    .find(m => m?.autor === 'asesor_juridico')
+                    ?.fecha || null,
                 fichaActual: {
                     ...mem.ficha,
                     ficha_personal: { ...(mem.ficha.ficha_personal || {}) },
@@ -916,7 +927,7 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
         async pausar(jid, valor) {
             const mem = await cargarDesdeFirestore(jid);
             mem.pausado = Boolean(valor);
-            await persistirEnFirestore(jid);
+            await persistirEnFirestore(jid, true);
             if (mem.expedienteId && coleccionCasos) {
                 await coleccionCasos.doc(mem.expedienteId).set({
                     ia_activa: !mem.pausado,

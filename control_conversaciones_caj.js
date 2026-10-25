@@ -153,20 +153,8 @@ function crearControlConversaciones({
         } else if (evento.type === 'add') {
             c.etiquetas.add(id);
 
-            // Si el asesor vuelve a etiquetar el chat,
-            // la IA puede retomar el control.
-            if (c.pausado) {
-                c.pausado = false;
-
-                if (
-                    repo &&
-                    typeof repo.pausar === 'function'
-                ) {
-                    return Promise.resolve(
-                        repo.pausar(a.chatId, false)
-                    ).catch(() => {});
-                }
-            }
+            // CAJ_RESPETAR_PAUSA_EXPLICITA_V1
+            // Una etiqueta autoriza el chat, pero no reactiva la IA.
         }
 
         return Promise.resolve();
@@ -178,20 +166,28 @@ function crearControlConversaciones({
         c.enListaAsesor = Boolean(habilitado);
         c.revision++;
 
-        if (habilitado && c.pausado) {
-            c.pausado = false;
+        // Habilitar el chat no revoca una pausa del asesor.
+        // Solo la orden CONTINUAR IA puede hacerlo.
+        return Promise.resolve();
+    }
 
-            if (
-                repo &&
-                typeof repo.pausar === 'function'
-            ) {
-                return Promise.resolve(
-                    repo.pausar(jid, false)
-                ).catch(() => {});
-            }
+    // CAJ_PAUSA_MANUAL_EXPLICITA_V1
+    // Pausa interna sin enviar mensajes al cliente.
+    function pausarManual(jid) {
+        if (!permitido(jid)) {
+            return Promise.reject(
+                new Error('Chat CAJ no autorizado')
+            );
         }
 
-        return Promise.resolve();
+        const c = chat(jid);
+        c.pausado = true;
+        c.revision++;
+
+        return encolar(jid, async () => {
+            await repo.pausar(jid, true);
+            return { pausado: true };
+        });
     }
 
     function reactivar(jid) {
@@ -523,6 +519,7 @@ function crearControlConversaciones({
         editarEtiqueta,
         asociarEtiqueta,
         asignarEnLista,
+        pausarManual,
         reactivar,
         registrarIdPropio,
 
