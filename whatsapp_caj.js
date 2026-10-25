@@ -60,6 +60,8 @@ const conflictosConsecutivos = new Map();
 const respaldosPendientes = new Map();
 
 const idsEnviadosPorBot = new Set();
+// CAJ_IDENTIFICAR_BOT_POR_TEXTO_V1
+const textosEnviadosPorBot = new Map();
 const envioBotReciente = new Map();
 const ultimosMensajesCliente = new Map();
 
@@ -290,6 +292,19 @@ function obtenerOCrearControl(sessionId) {
             }
 
             registrarIdMensajeBot(idSalida);
+
+            // Registrar el texto antes del envio para reconocer
+            // ecos de WhatsApp aunque todavia no exista su ID.
+            textosEnviadosPorBot.set(jid, {
+                texto: respuesta,
+                fecha: Date.now()
+            });
+
+            if (textosEnviadosPorBot.size > 1000) {
+                textosEnviadosPorBot.delete(
+                    textosEnviadosPorBot.keys().next().value
+                );
+            }
 
             envioBotReciente.set(
                 jid,
@@ -1139,8 +1154,18 @@ async function crearSesionBaileys(sessionId, generacion) {
                     '🤖 Sistema AlucineLex'
                 );
 
+            // CAJ_IDENTIFICAR_BOT_POR_TEXTO_V1
+            const ultimoBot = textosEnviadosPorBot.get(senderJid);
+            const coincideTextoBot =
+                fromMe &&
+                ultimoBot &&
+                Date.now() - ultimoBot.fecha >= 0 &&
+                Date.now() - ultimoBot.fecha < 20000 &&
+                textoEntrante === ultimoBot.texto;
+
             const esMensajeDelBot =
                 idsEnviadosPorBot.has(msgId) ||
+                coincideTextoBot ||
                 (fromMe && tieneEncabezadoBot) ||
                 (
                     fromMe &&
