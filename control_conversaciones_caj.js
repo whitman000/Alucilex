@@ -434,9 +434,33 @@ function crearControlConversaciones({
 
                 let respuesta;
 
+                // CAJ_ACLARACION_CONTEXTUAL_V1
+                // Solo aceptar aclaraciones del campo que se
+                // pregunto efectivamente al cliente.
+                const interpretacionCAJ =
+                    resultado?.interpretacion_respuesta;
+
+                const preguntaAclaracionCAJ =
+                    campoElegidoCAJ &&
+                    contexto.entrevista?.campoActual ===
+                        campoElegidoCAJ.campo &&
+                    interpretacionCAJ?.campo ===
+                        campoElegidoCAJ.campo &&
+                    interpretacionCAJ?.estado ===
+                        'requiere_aclaracion' &&
+                    typeof interpretacionCAJ.aclaracion ===
+                        'string' &&
+                    interpretacionCAJ.aclaracion.trim()
+                        ? interpretacionCAJ.aclaracion.trim()
+                        : null;
+
                 if (campoElegidoCAJ) {
-                    // Nunca cerrar si existen datos pendientes.
-                    respuesta = encabezadoCAJ + campoElegidoCAJ.pregunta;
+                    // Mantener pendiente el mismo campo hasta
+                    // obtener una respuesta suficiente.
+                    respuesta = encabezadoCAJ + (
+                        preguntaAclaracionCAJ ||
+                        campoElegidoCAJ.pregunta
+                    );
                 } else if (actual.entrevista?.finalizada === true) {
                     // El cliente confirmó expresamente el término.
                     respuesta = respuestaOriginal;
@@ -492,7 +516,10 @@ function crearControlConversaciones({
                 // con el campo determinado por el controlador.
                 if (
                     campoElegidoCAJ &&
-                    respuesta.includes(campoElegidoCAJ.pregunta) &&
+                    (
+                        respuesta.includes(campoElegidoCAJ.pregunta) ||
+                        Boolean(preguntaAclaracionCAJ)
+                    ) &&
                     typeof repo.registrarCampoPreguntado === 'function'
                 ) {
                     await repo.registrarCampoPreguntado(

@@ -69,6 +69,9 @@ function extraerDatosHeuristicos(texto = '', fichaPrevia = {}) {
 async function analizarMensajeWhatsAppCAJ({ jid, texto = '', delAsesor = false, contexto = {}, silencioso = false }) {
     const fichaActual = contexto.fichaActual || {};
     const historial = Array.isArray(contexto.historial) ? contexto.historial : [];
+
+    // CAJ_INTERPRETACION_CONTEXTUAL_V1
+    const campoPendiente = contexto.entrevista?.campoActual || null;
     const nombreAsesor = contexto.asesorNombre || fichaActual.postulante_nombre || process.env.CAJ_ASESOR_NOMBRE || 'Carlos Rosas';
     const nombreCentro = contexto.centroNombre || fichaActual.centro_caj || process.env.CAJ_NOMBRE_CENTRO || 'CENTRO DE ATENCIÓN JURÍDICA (CAJ)';
 
@@ -143,8 +146,24 @@ REGLAS DE EXTRACCION PARA LOS NUEVOS PANELES:
 - La edad se obtiene a partir de la fecha de nacimiento; no la inventes.
 - Si el asesor interviene y el modo es silencioso, extrae datos sin enviar ninguna pregunta.
 - No mezcles antecedentes de diferentes causas o expedientes.
+INTERPRETACION CONTEXTUAL DE LA RESPUESTA:
+- Analiza el último mensaje en relación con el campo pendiente.
+- Distingue respuestas válidas, datos desconocidos, datos no aplicables y respuestas ambiguas.
+- Acepta lenguaje natural. No exijas expresiones literales.
+- Si el cliente desconoce un dato, registra ese estado sin inventar información.
+- Si la respuesta es afirmativa pero requiere identificar una persona, fecha u otro antecedente, solicita aclaración.
+- No declares un campo resuelto si el mensaje no responde a la pregunta.
+- No confundas "no tengo audiencia" con "no sé cuándo es".
+- La interpretación debe corresponder exclusivamente al campo pendiente.
+
 DEBES RESPONDER EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA EXACTA (sin bloques markdown adicionales):
 {
+  "interpretacion_respuesta": {
+    "campo": "campo pendiente o cadena vacía",
+    "estado": "respondido | desconocido | no_aplica | requiere_aclaracion | no_relacionado",
+    "valor": "dato interpretado o cadena vacía",
+    "aclaracion": "pregunta necesaria o cadena vacía"
+  },
   "datos_extraidos": {
     "usuario_nombre": "string o vacío si aún no lo dice",
     "usuario_rut": "string formato 12345678-9 o vacío",
@@ -195,7 +214,10 @@ DEBES RESPONDER EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA EX
   "cuerpo_respuesta": "Texto de tu respuesta guiando al cliente (o cadena vacía si silencioso es true)"
 }`;
 
-    const promptUsuario = `ESTADO ACTUAL DE LA FICHA EN FIREBASE:
+    const promptUsuario = `CAMPO PENDIENTE DE LA ENTREVISTA:
+${campoPendiente || '(ninguno)'}
+
+ESTADO ACTUAL DE LA FICHA EN FIREBASE:
 ${JSON.stringify(baseHeuristica, null, 2)}
 
 HISTORIAL RECIENTE DE LA CONVERSACIÓN DE WHATSAPP:
@@ -290,9 +312,20 @@ Devuelve únicamente el JSON solicitado.`;
         const cuerpo = silencioso ? '' : (parsed.cuerpo_respuesta || parsed.respuesta_humana || '');
         const respuestaConPlantilla = silencioso ? '' : aplicarPlantillaEncabezadoCAJ(cuerpo, nombreAsesor, nombreCentro);
 
+        // CAJ_ENTREGAR_INTERPRETACION_V1
+        // El controlador validara esta interpretacion
+        // antes de permitir avanzar el cuestionario.
+        const interpretacionRespuesta =
+            parsed.interpretacion_respuesta &&
+            typeof parsed.interpretacion_respuesta === 'object' &&
+            !Array.isArray(parsed.interpretacion_respuesta)
+                ? parsed.interpretacion_respuesta
+                : null;
+
         return {
             datos_extraidos: datosExtraidos,
-            respuesta_humana: respuestaConPlantilla
+            respuesta_humana: respuestaConPlantilla,
+            interpretacion_respuesta: interpretacionRespuesta
         };
         } catch (error) {
         const estadoHTTP = error.response?.status || null;

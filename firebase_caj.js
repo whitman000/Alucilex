@@ -1037,6 +1037,16 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 telefono: mem.telefono,
                 historial: mem.historial.slice(-25),
                 fichaActual: mem.ficha,
+                // CAJ_CONTEXTO_PREGUNTA_IA_V1
+                entrevista: {
+                    campoActual: mem.entrevista?.campoActual || null,
+                    camposResueltos: [
+                        ...(mem.entrevista?.camposResueltos || [])
+                    ],
+                    finalizada: mem.entrevista?.finalizada === true,
+                    cierre_preguntado:
+                        mem.entrevista?.cierre_preguntado === true
+                },
                 asesorNombre: mem.ficha.postulante_nombre || asesor.nombre,
                 asesorId: mem.ficha.postulante_id || asesor.id,
                 centroNombre: mem.ficha.centro_caj || asesor.centro_caj
@@ -1252,6 +1262,218 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 }
             }
 
+            // CAJ_AVANCE_CONTEXTUAL_IA_V1
+            // Aceptar una interpretacion solo para el campo preguntado.
+            const interpretacion = resultado.interpretacion_respuesta;
+
+            // CAJ_CAUSA_JUDICIAL_CONTEXTUAL_V1
+            // Interpretar respuestas naturales sin depender
+            // de una lista cerrada de expresiones.
+            if (
+                !delAsesor &&
+                entrevista.cierre_preguntado !== true &&
+                entrevista.campoActual === 'existeCausaJudicial' &&
+                anterior?.autor === 'ia_caj' &&
+                interpretacion?.campo === 'existeCausaJudicial'
+            ) {
+                const estadoCausa = interpretacion.estado;
+                const valorCausa = String(
+                    interpretacion.valor ?? ''
+                ).trim().toLowerCase();
+
+                let existeCausaInterpretada = null;
+
+                if (
+                    estadoCausa === 'respondido' &&
+                    ['true', 'si', 'sí'].includes(valorCausa)
+                ) {
+                    existeCausaInterpretada = true;
+                } else if (
+                    estadoCausa === 'no_aplica' ||
+                    (
+                        estadoCausa === 'respondido' &&
+                        ['false', 'no'].includes(valorCausa)
+                    )
+                ) {
+                    existeCausaInterpretada = false;
+                }
+
+                if (typeof existeCausaInterpretada === 'boolean') {
+                    entrevista.existeCausaJudicial =
+                        existeCausaInterpretada;
+
+                    entrevista.campoActual = null;
+
+                    console.log(
+                        '[CAJ ENTREVISTA] Existencia de causa interpretada',
+                        { existeCausaJudicial: existeCausaInterpretada }
+                    );
+                }
+            }
+
+            // CAJ_VALIDACION_GENERAL_ENTREVISTA_V1
+            // El mismo criterio se aplica a datos personales
+            // y antecedentes juridicos.
+            const { PREGUNTAS_PERSONALES } =
+                require('./entrevista_caj');
+
+            const personales = new Set(
+                PREGUNTAS_PERSONALES.map(item => item[0])
+            );
+
+            const juridicos = new Set([
+                'consulta_juridica',
+                'relato_hechos',
+                'contraparte_nombre',
+                'objetivo_consulta',
+                'numero_causa',
+                'tribunal',
+                'calidad_procesal',
+                'estado_procesal',
+                'fecha_audiencia',
+                'ruc'
+            ]);
+
+            // Solamente estos campos pueden omitirse
+            // sin detener la entrevista.
+            const omitibles = new Set([
+                'apellido2',
+                'genero',
+                'telefono_fijo',
+                'telefono_recado',
+                'email',
+                'etnia',
+                'representante_legal',
+                'contraparte_nombre',
+                'numero_causa',
+                'tribunal',
+                'ruc',
+                'fecha_audiencia'
+            ]);
+
+            const campoEsperado = entrevista.campoActual;
+
+            const interpretacionValida =
+                !delAsesor &&
+                entrevista.cierre_preguntado !== true &&
+                anterior?.autor === 'ia_caj' &&
+                typeof campoEsperado === 'string' &&
+                (
+                    personales.has(campoEsperado) ||
+                    juridicos.has(campoEsperado)
+                ) &&
+                interpretacion &&
+                typeof interpretacion === 'object' &&
+                !Array.isArray(interpretacion) &&
+                interpretacion.campo === campoEsperado;
+
+            const extraidosContextuales =
+                resultado.datos_extraidos || {};
+
+            const personalExtraida =
+                extraidosContextuales.ficha_personal || {};
+
+            const juridicaExtraida =
+                extraidosContextuales.antecedentes_juridicos || {};
+
+            const fechaValida = valor => {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+                    return false;
+                }
+
+                const fecha = new Date(valor + 'T00:00:00Z');
+
+                return !Number.isNaN(fecha.getTime()) &&
+                    fecha.toISOString().slice(0, 10) === valor;
+            };
+
+            let valorExtraido = '';
+
+            if (personales.has(campoEsperado)) {
+                valorExtraido = personalExtraida[campoEsperado];
+
+                if (!valorExtraido) {
+                    valorExtraido =
+                        extraidosContextuales[campoEsperado];
+                }
+            } else if (juridicos.has(campoEsperado)) {
+                valorExtraido = juridicaExtraida[campoEsperado];
+
+                if (!valorExtraido) {
+                    valorExtraido =
+                        extraidosContextuales[campoEsperado];
+                }
+            }
+
+            const valorConfirmado = String(
+                valorExtraido ?? ''
+            ).trim();
+
+            const valorInterpretado = String(
+                interpretacion?.valor ?? ''
+            ).trim();
+
+            // CAJ_COINCIDENCIA_SEMANTICA_VALIDADA_V1
+            // Contrastar la interpretacion con la extraccion.
+            const normalizarDatoCAJ = valor =>
+                String(valor ?? '')
+                    .trim()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/\s+/g, ' ')
+                    .toLowerCase();
+
+            const datoInterpretadoCAJ =
+                normalizarDatoCAJ(valorInterpretado);
+
+            const datoExtraidoCAJ =
+                normalizarDatoCAJ(valorConfirmado);
+
+            const respuestasNoSuficientesCAJ = new Set([
+                'si', 'no', 'true', 'false',
+                'no se', 'desconocido',
+                'no aplica', 'por determinar',
+                'pendiente'
+            ]);
+
+            const respuestaSuficiente =
+                interpretacionValida &&
+                interpretacion.estado === 'respondido' &&
+                datoExtraidoCAJ.length > 0 &&
+                datoInterpretadoCAJ.length > 0 &&
+                datoExtraidoCAJ === datoInterpretadoCAJ &&
+                !respuestasNoSuficientesCAJ.has(datoExtraidoCAJ) &&
+                (
+                    campoEsperado !== 'fecha_audiencia' ||
+                    fechaValida(valorInterpretado)
+                );
+            const respuestaOmitible =
+                interpretacionValida &&
+                omitibles.has(campoEsperado) &&
+                (
+                    interpretacion.estado === 'desconocido' ||
+                    interpretacion.estado === 'no_aplica'
+                );
+
+            if (respuestaSuficiente || respuestaOmitible) {
+                entrevista.camposResueltos = [
+                    ...new Set([
+                        ...(entrevista.camposResueltos || []),
+                        campoEsperado
+                    ])
+                ];
+
+                entrevista.campoActual = null;
+
+                console.log(
+                    '[CAJ ENTREVISTA] Avance contextual',
+                    {
+                        campo: campoEsperado,
+                        estado: interpretacion.estado
+                    }
+                );
+            }
+
             mem.entrevista = entrevista;
 
             const extraidos = resultado.datos_extraidos || {};
@@ -1310,6 +1532,21 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 const consolidados = { ...anteriores };
 
                 for (const [campo, valor] of Object.entries(recibidos)) {
+                    // CAJ_ACLARACION_GENERAL_V1
+                    // No consolidar el campo actual cuando
+                    // la IA indica que falta informacion.
+                    if (
+                        !delAsesor &&
+                        campo === campoEsperado &&
+                        (
+                            grupo === 'ficha_personal' ||
+                            grupo === 'antecedentes_juridicos'
+                        ) &&
+                        interpretacion?.campo === campoEsperado &&
+                        interpretacion?.estado === 'requiere_aclaracion'
+                    ) {
+                        continue;
+                    }
                     if (
                         typeof valor === 'string' &&
                         valor.trim() !== ''
@@ -1508,7 +1745,8 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 campoActual: campo
             };
 
-            await persistirEnFirestore(jid);
+            // CAJ_CONFIRMAR_CAMPO_PREGUNTADO_V1
+            await persistirEnFirestore(jid, true);
         },
 
         async reservarSalida(jid, idSalida) {
