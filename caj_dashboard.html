@@ -1776,7 +1776,14 @@ body > header small {
                     if (data.ok) {
                         alert('✅ Expediente creado con éxito.');
                         form.reset();
-                        cargarCasos();
+
+                        // CAJ_SELECCION_NUEVA_CAUSA_V1
+                        // Mostrar el expediente creado en el panel derecho.
+                        await cargarCasos();
+
+                        if (data.id) {
+                            seleccionarCaso(data.id);
+                        }
                     } else {
                         alert('Error: ' + data.error);
                     }
