@@ -41,10 +41,11 @@ const nombresPermitidos = () => {
 function evaluarAccesoPorEtiquetas(etiquetas = []) {
     const permitidas = nombresPermitidos();
 
+    // CAJ_ETIQUETA_CONTIENE_IA_V1
     const permitirIA = etiquetas.some(e =>
-        permitidas.includes(
-            normalizar(typeof e === 'string' ? e : e.name)
-        )
+        normalizar(
+            typeof e === 'string' ? e : e.name
+        ).includes('ia')
     );
 
     return {
@@ -153,8 +154,18 @@ function crearControlConversaciones({
         } else if (evento.type === 'add') {
             c.etiquetas.add(id);
 
-            // CAJ_RESPETAR_PAUSA_EXPLICITA_V1
-            // Una etiqueta autoriza el chat, pero no reactiva la IA.
+            // CAJ_REACTIVAR_POR_ETIQUETA_IA_V1
+            const nombre = etiquetas.get(id) || '';
+
+            if (
+                evaluarAccesoPorEtiquetas([nombre]).permitirIA
+            ) {
+                return Promise.resolve(
+                    repo.pausar(a.chatId, false)
+                ).then(() => {
+                    c.pausado = false;
+                });
+            }
         }
 
         return Promise.resolve();
