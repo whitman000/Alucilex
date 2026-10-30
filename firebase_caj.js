@@ -789,6 +789,8 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                             typeof guardada.requiereRuc === 'boolean'
                                 ? guardada.requiereRuc
                                 : null,
+                        esperandoDetalleAdicional:
+                            guardada.esperandoDetalleAdicional === true,
                         // CAJ_RECUPERAR_ESTADOS_RESPUESTAS_V1
                         estadosRespuestas:
                             guardada.estadosRespuestas &&
@@ -919,6 +921,8 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                         mem.entrevista?.finalizada === true,
                     camposResueltos: [...(mem.entrevista?.camposResueltos || [])],
                     campoActual: mem.entrevista?.campoActual || null,
+                    esperandoDetalleAdicional:
+                        mem.entrevista?.esperandoDetalleAdicional === true,
                     existeCausaJudicial:
                         typeof mem.entrevista?.existeCausaJudicial === 'boolean'
                             ? mem.entrevista.existeCausaJudicial
@@ -1047,6 +1051,8 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 // CAJ_CONTEXTO_PREGUNTA_IA_V1
                 entrevista: {
                     campoActual: mem.entrevista?.campoActual || null,
+                    esperandoDetalleAdicional:
+                        mem.entrevista?.esperandoDetalleAdicional === true,
                     camposResueltos: [
                         ...(mem.entrevista?.camposResueltos || [])
                     ],
@@ -1158,16 +1164,54 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 }
             }
 
-            const confirmaTermino = new Set([
-                'no',
-                'no gracias',
-                'no tengo nada mas',
-                'nada mas',
-                'eso es todo',
-                'no tengo mas antecedentes',
-                'no hay nada mas que agregar'
-            ]).has(respuestaCliente);
+            // CAJ_CIERRE_ESTADOS_V3
+            const respuestaNegativaCierreCAJ =
+                /^(?:no|no gracias|no muchas gracias|no tengo nada mas|no tengo nada mas que agregar|no tengo mas antecedentes|no hay nada mas que agregar|nada mas|eso es todo|seria todo|no eso seria todo|no eso seria todo muchas gracias)$/
+                    .test(respuestaCliente);
 
+            const respuestaPositivaCierreCAJ =
+                /^(?:si|claro|si tengo|tengo algo mas|si quiero agregar|si quiero agregar algo)$/
+                    .test(respuestaCliente);
+
+            if (!delAsesor && entrevista.cierre_preguntado === true) {
+                if (respuestaNegativaCierreCAJ) {
+                    entrevista.fase = 'finalizada';
+                    entrevista.finalizada = true;
+                    entrevista.cierre_preguntado = false;
+                    entrevista.esperandoDetalleAdicional = false;
+                    entrevista.campoActual = null;
+                } else if (respuestaPositivaCierreCAJ) {
+                    entrevista.fase = 'esperando_detalle';
+                    entrevista.finalizada = false;
+                    entrevista.cierre_preguntado = false;
+                    entrevista.esperandoDetalleAdicional = true;
+                    entrevista.campoActual = null;
+                }
+            } else if (
+                !delAsesor &&
+                entrevista.esperandoDetalleAdicional === true &&
+                respuestaCliente
+            ) {
+                // La IA procesa los antecedentes que acaba de aportar.
+                entrevista.esperandoDetalleAdicional = false;
+                entrevista.fase = 'en_curso';
+                entrevista.finalizada = false;
+            } else if (
+                !delAsesor &&
+                entrevista.finalizada === true &&
+                respuestaCliente
+            ) {
+                entrevista.finalizada = false;
+                entrevista.fase = 'en_curso';
+            }
+
+            console.log('[CAJ CIERRE] Estado', {
+                finalizada: entrevista.finalizada === true,
+                esperandoDetalle:
+                    entrevista.esperandoDetalleAdicional === true,
+                pendienteConfirmacion:
+                    entrevista.cierre_preguntado === true
+            });
             // CAJ_RESPUESTA_NO_APLICABLE_V1
             // Solo resolver el campo que fue efectivamente preguntado.
             if (
@@ -1240,32 +1284,6 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                     ];
 
                     entrevista.campoActual = null;
-                }
-            }
-
-            if (!delAsesor && respuestaCliente) {
-                if (
-                    entrevista.cierre_preguntado === true &&
-                    preguntaAnterior &&
-                    confirmaTermino
-                ) {
-                    entrevista.fase = 'finalizada';
-                    entrevista.finalizada = true;
-                    entrevista.cierre_preguntado = false;
-                } else if (
-                    entrevista.finalizada === true ||
-                    (
-                        entrevista.cierre_preguntado === true &&
-                        (
-                            !preguntaAnterior ||
-                            !['no se', 'no estoy seguro']
-                                .includes(respuestaCliente)
-                        )
-                    )
-                ) {
-                    entrevista.fase = 'en_curso';
-                    entrevista.finalizada = false;
-                    entrevista.cierre_preguntado = false;
                 }
             }
 
@@ -1923,6 +1941,7 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                         fase: 'esperando_confirmacion',
                         cierre_preguntado: true,
                         finalizada: false,
+                        esperandoDetalleAdicional: false,
                         campoActual: null
                     };
                 }

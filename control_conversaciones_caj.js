@@ -459,9 +459,20 @@ function crearControlConversaciones({
                         preguntaAclaracionCAJ ||
                         campoElegidoCAJ.pregunta
                     );
+                } else if (
+                    actual.entrevista?.esperandoDetalleAdicional === true
+                ) {
+                    respuesta = encabezadoCAJ +
+                        '¿Qué antecedente adicional desea agregar a su consulta?';
                 } else if (actual.entrevista?.finalizada === true) {
                     // El cliente confirmó expresamente el término.
                     respuesta = respuestaOriginal;
+                } else if (
+                    actual.entrevista?.cierre_preguntado === true
+                ) {
+                    respuesta = encabezadoCAJ +
+                        'Para finalizar su entrevista, ¿desea agregar ' +
+                        'otro antecedente? Responda sí o no.';
                 } else {
                     // Todos los campos aplicables están resueltos.
                     // Solicitar confirmación expresa.
