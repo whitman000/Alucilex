@@ -788,7 +788,14 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                         requiereRuc:
                             typeof guardada.requiereRuc === 'boolean'
                                 ? guardada.requiereRuc
-                                : null
+                                : null,
+                        // CAJ_RECUPERAR_ESTADOS_RESPUESTAS_V1
+                        estadosRespuestas:
+                            guardada.estadosRespuestas &&
+                            typeof guardada.estadosRespuestas === 'object' &&
+                            !Array.isArray(guardada.estadosRespuestas)
+                                ? { ...guardada.estadosRespuestas }
+                                : {}
                     };
                 }
                 if (Array.isArray(data.historial) && data.historial.length > mem.historial.length) {
@@ -1429,33 +1436,25 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
             const datoExtraidoCAJ =
                 normalizarDatoCAJ(valorConfirmado);
 
-            const respuestasNoSuficientesCAJ = new Set([
-                'si', 'no', 'true', 'false',
-                'no se', 'desconocido',
-                'no aplica', 'por determinar',
-                'pendiente'
+            // CAJ_AVANCE_FLEXIBLE_GENERAL_V1
+            // La interpretacion contextual de la IA determina
+            // si la respuesta fue comprendida.
+            // No exigir coincidencia textual entre dos extracciones.
+
+            const estadosComprensiblesCAJ = new Set([
+                'respondido',
+                'no_aplica',
+                'desconocido'
             ]);
 
-            const respuestaSuficiente =
+            const respuestaComprensibleCAJ =
                 interpretacionValida &&
-                interpretacion.estado === 'respondido' &&
-                datoExtraidoCAJ.length > 0 &&
-                datoInterpretadoCAJ.length > 0 &&
-                datoExtraidoCAJ === datoInterpretadoCAJ &&
-                !respuestasNoSuficientesCAJ.has(datoExtraidoCAJ) &&
-                (
-                    campoEsperado !== 'fecha_audiencia' ||
-                    fechaValida(valorInterpretado)
-                );
-            const respuestaOmitible =
-                interpretacionValida &&
-                omitibles.has(campoEsperado) &&
-                (
-                    interpretacion.estado === 'desconocido' ||
-                    interpretacion.estado === 'no_aplica'
-                );
+                estadosComprensiblesCAJ.has(
+                    interpretacion.estado
+                ) &&
+                String(mensaje.texto ?? '').trim().length > 0;
 
-            if (respuestaSuficiente || respuestaOmitible) {
+            if (respuestaComprensibleCAJ) {
                 entrevista.camposResueltos = [
                     ...new Set([
                         ...(entrevista.camposResueltos || []),
@@ -1557,6 +1556,57 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
 
                 mem.ficha[grupo] = consolidados;
             }
+
+            // CAJ_GUARDAR_RESPUESTA_FLEXIBLE_V1
+            // Guardar la respuesta comprendida en su campo.
+            // Conservar siempre los antecedentes existentes.
+            if (respuestaComprensibleCAJ && campoEsperado) {
+                const grupoRespuestaCAJ = personales.has(campoEsperado)
+                    ? 'ficha_personal'
+                    : juridicos.has(campoEsperado)
+                        ? 'antecedentes_juridicos'
+                        : null;
+
+                if (grupoRespuestaCAJ) {
+                    const valoresCAJ =
+                        mem.ficha[grupoRespuestaCAJ] || {};
+
+                    const anteriorCAJ = String(
+                        valoresCAJ[campoEsperado] ?? ''
+                    ).trim();
+
+                    let respuestaParaGuardarCAJ = '';
+
+                    if (interpretacion.estado === 'no_aplica') {
+                        respuestaParaGuardarCAJ = 'No aplica';
+                    } else if (
+                        interpretacion.estado === 'desconocido'
+                    ) {
+                        respuestaParaGuardarCAJ = 'Desconocido';
+                    } else {
+                        respuestaParaGuardarCAJ =
+                            valorInterpretado ||
+                            valorConfirmado ||
+                            String(mensaje.texto ?? '').trim();
+                    }
+
+                    if (
+                        !anteriorCAJ &&
+                        respuestaParaGuardarCAJ
+                    ) {
+                        mem.ficha[grupoRespuestaCAJ] = {
+                            ...valoresCAJ,
+                            [campoEsperado]: respuestaParaGuardarCAJ
+                        };
+                    }
+
+                    entrevista.estadosRespuestas = {
+                        ...(entrevista.estadosRespuestas || {}),
+                        [campoEsperado]: interpretacion.estado
+                    };
+                }
+            }
+
             let expedienteActivo = null;
 
             if (mem.expedienteId) {

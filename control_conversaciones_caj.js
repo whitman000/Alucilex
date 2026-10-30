@@ -455,8 +455,6 @@ function crearControlConversaciones({
                         : null;
 
                 if (campoElegidoCAJ) {
-                    // Mantener pendiente el mismo campo hasta
-                    // obtener una respuesta suficiente.
                     respuesta = encabezadoCAJ + (
                         preguntaAclaracionCAJ ||
                         campoElegidoCAJ.pregunta
