@@ -1360,7 +1360,9 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
 
             const campoEsperado = entrevista.campoActual;
 
-            const interpretacionValida =
+            // CAJ_AVANCE_SEMANTICO_REPARADO_V1
+            // Separar la pregunta registrada de la interpretacion IA.
+            const preguntaActivaCAJ =
                 !delAsesor &&
                 entrevista.cierre_preguntado !== true &&
                 anterior?.autor === 'ia_caj' &&
@@ -1368,7 +1370,10 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 (
                     personales.has(campoEsperado) ||
                     juridicos.has(campoEsperado)
-                ) &&
+                );
+
+            const interpretacionValida =
+                preguntaActivaCAJ &&
                 interpretacion &&
                 typeof interpretacion === 'object' &&
                 !Array.isArray(interpretacion) &&
@@ -1447,12 +1452,95 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                 'desconocido'
             ]);
 
-            const respuestaComprensibleCAJ =
+            // CAJ_EXTRACCION_ALTERNATIVA_V1
+            // La extraccion IA puede ser valida aunque no devuelva
+            // interpretacion_respuesta para el campo exacto.
+            const normalizarCampoCAJ = valor =>
+                String(valor ?? '')
+                    .trim()
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase();
+
+            let datoNuevoCAJ = valorConfirmado;
+
+            if (
+                campoEsperado === 'nombres' &&
+                !String(datoNuevoCAJ || '').trim()
+            ) {
+                datoNuevoCAJ =
+                    extraidosContextuales.usuario_nombre || '';
+            }
+
+            const valorAnteriorCAJ = personales.has(campoEsperado)
+                ? (
+                    mem.ficha.ficha_personal?.[campoEsperado] ||
+                    (
+                        campoEsperado === 'nombres'
+                            ? mem.ficha.usuario_nombre
+                            : mem.ficha[campoEsperado]
+                    ) ||
+                    ''
+                )
+                : (
+                    mem.ficha.antecedentes_juridicos?.[campoEsperado] ||
+                    mem.ficha[campoEsperado] ||
+                    ''
+                );
+
+            const datoNormalizadoCAJ =
+                normalizarCampoCAJ(datoNuevoCAJ);
+
+            const valoresInvalidosCAJ = new Set([
+                '', 'usuario caj', 'por determinar',
+                'sin asignar', 's/r', 'desconocido',
+                'no aplica', 'pendiente'
+            ]);
+
+            // Para identificadores y fechas se mantiene la
+            // interpretacion contextual y sus validaciones.
+            const camposEstrictosCAJ = new Set([
+                'usuario_rut',
+                'fecha_nacimiento',
+                'fecha_audiencia',
+                'email',
+                'ruc'
+            ]);
+
+            const extraccionNuevaCAJ =
+                preguntaActivaCAJ &&
+                !camposEstrictosCAJ.has(campoEsperado) &&
+                !['requiere_aclaracion', 'no_relacionado']
+                    .includes(interpretacion?.estado) &&
+                !valoresInvalidosCAJ.has(datoNormalizadoCAJ) &&
+                datoNormalizadoCAJ !==
+                    normalizarCampoCAJ(valorAnteriorCAJ);
+
+            const estadoContextualCAJ =
                 interpretacionValida &&
                 estadosComprensiblesCAJ.has(
                     interpretacion.estado
-                ) &&
+                )
+                    ? interpretacion.estado
+                    : null;
+
+            const estadoRespuestaCAJ =
+                estadoContextualCAJ ||
+                (extraccionNuevaCAJ ? 'respondido' : null);
+
+            const respuestaComprensibleCAJ =
+                preguntaActivaCAJ &&
+                Boolean(estadoRespuestaCAJ) &&
                 String(mensaje.texto ?? '').trim().length > 0;
+
+            console.log('[CAJ AVANCE] Diagnostico', {
+                campo: campoEsperado,
+                preguntaActiva: Boolean(preguntaActivaCAJ),
+                interpretacionValida: Boolean(interpretacionValida),
+                extraccionNueva: Boolean(extraccionNuevaCAJ),
+                estado: estadoRespuestaCAJ || 'pendiente',
+                avanzar: Boolean(respuestaComprensibleCAJ)
+            });
 
             if (respuestaComprensibleCAJ) {
                 entrevista.camposResueltos = [
@@ -1577,16 +1665,16 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
 
                     let respuestaParaGuardarCAJ = '';
 
-                    if (interpretacion.estado === 'no_aplica') {
+                    if (estadoRespuestaCAJ === 'no_aplica') {
                         respuestaParaGuardarCAJ = 'No aplica';
                     } else if (
-                        interpretacion.estado === 'desconocido'
+                        estadoRespuestaCAJ === 'desconocido'
                     ) {
                         respuestaParaGuardarCAJ = 'Desconocido';
                     } else {
                         respuestaParaGuardarCAJ =
-                            valorInterpretado ||
-                            valorConfirmado ||
+                            (interpretacionValida ? valorInterpretado : '') ||
+                            datoNuevoCAJ ||
                             String(mensaje.texto ?? '').trim();
                     }
 
@@ -1602,7 +1690,7 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
 
                     entrevista.estadosRespuestas = {
                         ...(entrevista.estadosRespuestas || {}),
-                        [campoEsperado]: interpretacion.estado
+                        [campoEsperado]: estadoRespuestaCAJ
                     };
                 }
             }

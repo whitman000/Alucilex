@@ -57,6 +57,21 @@ function obtenerDato(ficha, campo) {
         return personal[campo];
     }
 
+    // CAJ_NOMBRE_COMPATIBLE_V1
+    // Reconocer el nombre extraido en el campo tradicional.
+    if (campo === 'nombres') {
+        const nombre = String(
+            ficha.usuario_nombre || ''
+        ).trim();
+
+        if (
+            nombre &&
+            nombre.toLowerCase() !== 'usuario caj'
+        ) {
+            return nombre;
+        }
+    }
+
     if (campo === 'usuario_rut') {
         return ficha.usuario_rut;
     }
