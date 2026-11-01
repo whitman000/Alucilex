@@ -791,20 +791,17 @@ async function crearSesionBaileys(sessionId, generacion) {
 
             const conocidas = control.obtenerEtiquetas();
 
+            // CAJ_ETIQUETA_NOMBRE_REAL_V1
+            // No autorizar etiquetas sin nombre verificado.
             if (
                 tipoAccion === 'add' &&
                 !conocidas.some(
                     etiqueta => String(etiqueta.id) === labelId
                 )
             ) {
-                control.editarEtiqueta({
-                    id: labelId,
-                    name: ETIQUETAS_CAJ.RECEPCION_IA
-                });
-
-                guardarEtiquetasSesion(
-                    sessionId,
-                    control.obtenerEtiquetas()
+                console.warn(
+                    '[CAJ ETIQUETA] Nombre desconocido; sin autorizacion automatica',
+                    { sessionId, labelId }
                 );
             }
 

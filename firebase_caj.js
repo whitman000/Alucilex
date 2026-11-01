@@ -1574,7 +1574,7 @@ const docSnap = await coleccionConversaciones.doc(idConversacion).get();
                     '[CAJ ENTREVISTA] Avance contextual',
                     {
                         campo: campoEsperado,
-                        estado: interpretacion.estado
+                        estado: estadoRespuestaCAJ
                     }
                 );
             }
