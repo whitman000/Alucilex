@@ -154,18 +154,17 @@ function crearControlConversaciones({
         } else if (evento.type === 'add') {
             c.etiquetas.add(id);
 
-            // CAJ_REACTIVAR_POR_ETIQUETA_IA_V1
+            // CAJ_ETIQUETA_ESTABLE_V2
+            // La etiqueta autoriza la recepcion.
+            // No realizar escrituras a Firebase al etiquetar.
+            // Las pausas explicitas se gestionan por el control IA.
             const nombre = etiquetas.get(id) || '';
 
-            if (
-                evaluarAccesoPorEtiquetas([nombre]).permitirIA
-            ) {
-                return Promise.resolve(
-                    repo.pausar(a.chatId, false)
-                ).then(() => {
-                    c.pausado = false;
-                });
-            }
+            console.log('[CAJ ETIQUETA] Activacion local', {
+                autorizada:
+                    evaluarAccesoPorEtiquetas([nombre]).permitirIA,
+                pausaLocal: c.pausado === true
+            });
         }
 
         return Promise.resolve();
@@ -251,6 +250,16 @@ function crearControlConversaciones({
             texto = '',
             tipo = 'texto'
         } = mensaje || {};
+
+        // CAJ_DIAGNOSTICO_RECEPCION_V2
+        console.log('[CAJ CONTROL] Entrada', {
+            chat: jid ? clave(jid).slice(0, 12) : null,
+            conectado,
+            autorizado: jid ? permitido(jid) : false,
+            delAsesor: Boolean(delAsesor),
+            tipo,
+            longitud: String(texto || '').length
+        });
 
         if (!jid || !id || !permitido(jid)) {
             return { ignorado: true };
@@ -404,6 +413,17 @@ function crearControlConversaciones({
                     c.revision !== revisionEntrada ||
                     !permitido(jid)
                 ) {
+                    console.warn('[CAJ CONTROL] Salida suspendida', {
+                        chat: clave(jid).slice(0, 12),
+                        asesor: Boolean(delAsesor),
+                        pausaLocal: Boolean(c.pausado),
+                        pausaFirebase: Boolean(actual.pausado),
+                        revisionCambiada:
+                            c.revision !== revisionEntrada,
+                        autorizado: permitido(jid),
+                        campo:
+                            actual.entrevista?.campoActual || null
+                    });
                     return { silencioso: true };
                 }
 
@@ -546,6 +566,11 @@ function crearControlConversaciones({
                         jid,
                         campoElegidoCAJ.campo
                     );
+
+                    console.log('[CAJ CONTROL] Campo registrado', {
+                        chat: clave(jid).slice(0, 12),
+                        campo: campoElegidoCAJ.campo
+                    });
                 }
 
                 return { respondido: true };
