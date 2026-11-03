@@ -269,17 +269,6 @@ function crearControlConversaciones({
             return { propio: true };
         }
 
-        // CAJ_IGNORAR_ECO_VACIO_V1
-        // Un evento propio sin contenido reconocible
-        // no constituye intervencion del asesor.
-        if (
-            delAsesor &&
-            tipo === 'desconocido' &&
-            !String(texto || '').trim()
-        ) {
-            return { ignorado: true };
-        }
-
         const c = chat(jid);
         const pausaPrevia = c.pausado;
 
